@@ -24,7 +24,8 @@ def round_sig(x, sig=3):
 class Material:
     def __init__(self, name: str, modulus_params: list, strength_params: list,
                  thickness: float,
-                 density: float):
+                 density: float,
+                 source: str):
         self.name = name
 
         # Mpa
@@ -48,6 +49,9 @@ class Material:
         # kg/m^3
         self.rho = density
 
+        self.source = source
+
+
     def __str__(self):
         table = pd.DataFrame({
             "Modulus": ["Ex (GPa)", "Ey (GPa)", "Es (GPa)", "Vxy", None],
@@ -55,8 +59,8 @@ class Material:
             "Strength": ["Xt (MPa)", "Xc (MPa)", "Yt (MPa)", "Yc (MPa)",
                          "Sc (MPa)"],
             " ": [self.Xt, self.Xc, self.Yt, self.Yc, self.Sc],
-            "Other": ["h0 (m)", "rho (kg/m^3)", "", "", ""],
-            "  ": [self.h0, self.rho, "", "", ""],
+            "Other": ["h0 (m)", "rho (kg/m^3)", "Source", "", ""],
+            "  ": [self.h0, self.rho, self.source, "", ""],
         })
         print(self.name)
         print(tabulate(table, headers='keys', tablefmt='psql'))
@@ -106,7 +110,8 @@ def materials_load(csv_path="materials_database.csv"):
                     float(row["Sc"])
                 ],
                 float(row["h0"]),
-                float(row["rho"])
+                float(row["rho"]),
+                str(row["Source"])
             )
 
     return materials_list
@@ -245,7 +250,9 @@ def layup_material_change(lu: pd.DataFrame, layer_num:int, new_material: Materia
     :param new_material: Material object of the new material
     :return: nothing, changes dataframe in place
     """
-    lu.loc[lu["Layer #"] == layer_num, "Material_name"] = new_material
+    #print(new_material.name)
+    lu.loc[lu["Layer #"] == layer_num, "Material_name"] = new_material.name
+    lu.loc[lu["Layer #"] == layer_num, "Material"] = new_material
 
 def layup_thickness_change(lu: pd.DataFrame, layer_num:int, new_thickness: float):
     """
@@ -523,7 +530,7 @@ def generate_anisotropic_stiffness_tensor_C(A_matrix, B_matrix, D_matrix, lu: pd
 
     return C_matrix
 
-def generate_EYeq_rect_tube(A_matrix, D_matrix, in_height, in_width, lu: pd.DataFrame):
+def generate_EIeq_rect_tube(A_matrix, D_matrix, in_height, in_width, lu: pd.DataFrame):
     """
     Calculates the E*Y equivalent value [N*m^2] for a composite rectangular tube. Assumes layup is symmetric.
     EYeq can be used in beam theory calculations.
@@ -534,7 +541,7 @@ def generate_EYeq_rect_tube(A_matrix, D_matrix, in_height, in_width, lu: pd.Data
     :param in_height: The inside height of the tube [m]
     :param in_width: The inside width of the tube [m]
     :param lu: layup dataframe, output of layup_create()
-    :return: the E*Y equivalent for the tube [N*m^2]
+    :return: the E*I equivalent for the tube [N*m^2]
     """
     h = lu["Thickness (m)"].sum()
 
@@ -550,7 +557,7 @@ def generate_EYeq_rect_tube(A_matrix, D_matrix, in_height, in_width, lu: pd.Data
 
 def generate_Dx_eq_circ_tube(A_matrix, D_matrix, inner_diameter, lu: pd.DataFrame):
     """
-    Calculates the E*Y equivalent value [N*m^2] for a composite circular tube. Assumes layup is symmetric.
+    Calculates the E*I equivalent value [N*m^2] for a composite circular tube. Assumes layup is symmetric.
     EYeq can be used in beam theory calculations.
     calculate_A_B_D_matrix() must be run prior to calling this function.
 
