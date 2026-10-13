@@ -159,7 +159,7 @@ def layup_create(template: str, my_material: Material):
             # Core thickness in cm
             has_core = True
             Zc = float(t.replace("zc", ""))
-            core = Material("Core", [0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 0.1, 0.1, 0.1], Zc * 0.01, 0)
+            core = Material("Core", [0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 0.1, 0.1, 0.1], Zc * 0.01, 0, "N/A")
             layup.append(
                 Layer(core, Zc * 0.01, 0))  # treated as just another layer
 
