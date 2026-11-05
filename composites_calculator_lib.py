@@ -7,6 +7,18 @@ from tabulate import tabulate
 import math
 import numpy as np
 
+# COMPOSITE CALCULATOR LIBRARY by Alex L
+# mind the version number, this is a work in progress and will be updated frequently
+version = 1.1
+update_date = "2026-11-05"
+
+if __name__ == "__main__":
+    print("This is a library of functions for composite mechanics calculations, based on CLT. It is not meant to be run directly.")
+    print("Import this library into your own code and use the functions as needed.")
+    print("Version: " + str(version))
+    print("Last updated: " + str(update_date))
+    print("Created by Alex L.")
+
 # Helper Functions
 def round_sig(x, sig=3):
     """
