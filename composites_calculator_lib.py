@@ -9,8 +9,12 @@ import numpy as np
 
 # COMPOSITE CALCULATOR LIBRARY by Alex L
 # mind the version number, this is a work in progress and will be updated frequently
-version = 1.1
+version = 1.2
 update_date = "2026-11-05"
+
+# TODO: generate_anisotropic_stiffness_tensor_C() uses 6B/h^2 in both off-diagonal blocks, which is inconsistent
+# (use 2*sqrt(3)*B/h^2 for a symmetric C, or Tsai's 2B/h^2 / 6B/h^2), and its [A* B*; B* D*] relates in-plane
+# strains/curvatures to N/M, so it is not a 3D solid stiffness tensor - for FE shells, pass the raw ABD matrix instead.
 
 if __name__ == "__main__":
     print("This is a library of functions for composite mechanics calculations, based on CLT. It is not meant to be run directly.")
@@ -438,7 +442,7 @@ def calculate_A_B_D_matrix(lu: pd.DataFrame):
     """
     Calculates the s and q matrix of each layer in a layup. Appends to the same dataframe.
     :param lu: layup dataframe, output of layup_create()
-    :return: A_matrix [GPa*m or 10^9*N/m], B_matrix [Nm/m], D_matrix [Nm]
+    :return: A_matrix [GPa*m or 10^9*N/m], B_matrix [N or Nm/m], D_matrix [Nm]
     """
     # S and Q matrix
     lu[["S matrix", "Q matrix"]] = lu.apply(_s_q_matrix, axis=1, result_type="expand")
@@ -490,6 +494,7 @@ def calculate_A_B_D_matrix(lu: pd.DataFrame):
         [B16, B26 , B66]
     ])
     B_matrix *= 1/2
+    B_matrix *= 10**9
 
 
     D11 = np.sum((lu["TopHeight"].to_numpy() ** 3 - lu["BottomHeight"].to_numpy() ** 3) * Q11)
@@ -1016,3 +1021,222 @@ def generate_torsion_arbitrary_tube(csv_path, lu: pd.DataFrame, torque, axial_lo
     print("GJ equivalent [N*m^2] is ", GJ_eq)
     return {"twist_rate": twist_rate, "axial_strain": axial_strain, "shear_flow": q, "GJ_eq": GJ_eq,
             "enclosed_area": A_m, "perimeter": S}
+
+
+# Failure criteria helpers, used by calculate_safety_factors()
+def _strain_off_to_on(ply_angle, strain_off_axis):
+    """
+    Private function, uses ply angle to calculate on-axis strain from off-axis strain
+    :param ply_angle: orientation of the ply [deg]
+    :param strain_off_axis: off-axis strain vector [εx, εy, εs] (engineering shear strain)
+    :return: on-axis strain vector [ε1, ε2, ε6]
+    """
+    m = round_sig(math.cos(math.radians(ply_angle)), 6)
+    n = round_sig(math.sin(math.radians(ply_angle)), 6)
+
+    # helper variables to speed up arrays
+    m2 = round_sig(m * m, 6)
+    n2 = round_sig(n * n, 6)
+    mn = m * n
+
+    strain_off_to_on_matrix = np.array([[m2, n2, mn],
+                                        [n2, m2, -1 * mn],
+                                        [-2 * mn, 2 * mn, m2 - n2]])
+
+    return strain_off_to_on_matrix @ strain_off_axis
+
+def _maximum_stress_criterion(material: Material, stresses):
+    """
+    Private function, calculates safety factor R using the max stress criterion
+    :param material: material of the layer
+    :param stresses: on-axis stress vector [GPa]
+    :return: R for [fiber tension, fiber compression, matrix tension, matrix compression, shear].
+    None where that mode is not loaded
+    """
+    σx = stresses[0]
+    σy = stresses[1]
+    σs = stresses[2]
+
+    stress_criterion_R_list = [None, None, None, None, None]
+
+    # strengths converted from MPa to GPa
+    if σx > 0:
+        stress_criterion_R_list[0] = ((material.Xt / 1000) / σx)
+    if σx < 0:
+        stress_criterion_R_list[1] = ((material.Xc / 1000) / abs(σx))
+    if σy > 0:
+        stress_criterion_R_list[2] = ((material.Yt / 1000) / σy)
+    if σy < 0:
+        stress_criterion_R_list[3] = ((material.Yc / 1000) / abs(σy))
+    if σs != 0:
+        stress_criterion_R_list[4] = ((material.Sc / 1000) / abs(σs))
+
+    return stress_criterion_R_list
+
+def _tsai_wu_quadratic_criterion(material: Material, stresses):
+    """
+    Private function, calculates R using the Tsai-Wu quadratic interaction criterion
+    a*R^2 + b*R - 1 = 0, with F*xy = -0.5 (eq 7.15, 7.22)
+    :param material: material of the layer
+    :param stresses: on-axis stress vector [GPa]
+    :return: R (positive root). None if the ply is unloaded
+    """
+    σx = stresses[0] * 1000  # convert from GPa to MPa
+    σy = stresses[1] * 1000
+    σs = stresses[2] * 1000
+
+    Fxx = 1 / (material.Xt * material.Xc)  # 1/MPa^2
+    Fx = 1 / material.Xt - 1 / material.Xc  # 1/MPa
+    Fyy = 1 / (material.Yt * material.Yc)  # 1/Mpa^2
+    Fy = 1 / material.Yt - 1 / material.Yc  # 1/MPa
+    Fss = 1 / (material.Sc ** 2)  # 1/MPa^2
+    F_star_xy = -0.5  # from lecture 12 slide 12, also eq 7.22
+    Fxy = F_star_xy * math.sqrt((Fxx * Fyy))  # from eq 7.15
+
+    a = Fxx * σx * σx + 2 * Fxy * σx * σy + Fyy * σy * σy + Fss * σs * σs
+    b = Fx * σx + Fy * σy
+    c = -1.0
+
+    if a == 0:
+        return 1 / b if b > 0 else None
+
+    dis = (b ** 2) - (4 * a * c)
+    R = (-b + math.sqrt(dis)) / (2 * a)
+
+    return R
+
+def _hashin_failure_criteria(material: Material, stresses):
+    """
+    Private function, calculates R using the Hashin failure criteria
+    :param material: material of the layer
+    :param stresses: on-axis stress vector [GPa]
+    :return: R for [fiber tension, fiber compression, matrix tension, matrix compression].
+    None where that mode is not loaded
+    """
+    σx = stresses[0] * 1000  # convert stresses back to MPa
+    σy = stresses[1] * 1000
+    σs = stresses[2] * 1000
+
+    # FIBER TENSION
+    if σx > 0:
+        failure_index_ft = (material.Sc * material.Xt) / math.sqrt(
+            σx ** 2 * material.Sc ** 2 + material.Xt ** 2 * σs ** 2)
+    else:
+        failure_index_ft = None
+
+    # FIBER COMPRESSION
+    if σx < 0:
+        failure_index_fc = (-material.Xc) / σx
+    else:
+        failure_index_fc = None
+
+    # MATRIX TENSION
+    if σy > 0:
+        failure_index_mt = (material.Sc * material.Yt) / math.sqrt(
+            σs ** 2 * material.Yt ** 2 + material.Sc ** 2 * σy ** 2)
+    else:
+        failure_index_mt = None
+
+    # MATRIX COMPRESSION
+    if σy < 0:
+        failure_index_mc = (math.sqrt(
+            64 * material.Sc ** 2 * material.Yc ** 2 * σs ** 2 + 8 * σy ** 2 * material.Sc ** 2 * material.Yc ** 2
+            + σy ** 2 * material.Yc ** 4 + 16 * σy ** 2 * material.Sc ** 4)
+                            + 4 * σy * material.Sc ** 2 - σy * material.Yc ** 2) / (
+                                   2 * material.Yc * (4 * σs ** 2 + σy ** 2))
+    else:
+        failure_index_mc = None
+
+    return [failure_index_ft, failure_index_fc, failure_index_mt, failure_index_mc]
+
+def calculate_safety_factors(lu: pd.DataFrame, applied_stress: np.ndarray, applied_moment: np.ndarray):
+    """
+    Calculates the safety factors R at the top and bottom of every ply in a layup using the maximum stress,
+    Tsai-Wu quadratic and Hashin failure criteria. R is the factor the applied loads can be multiplied by before
+    the ply fails. Prints the table of safety factors and the first ply failure for each criterion.
+
+    Mid-plane strains and curvatures come from the full [A B; B D] matrix, so unsymmetric layups are handled.
+    Layer 1 is at the top of the laminate (z = +h/2), matching calculate_A_B_D_matrix(). Core layers are skipped.
+
+    :param lu: layup dataframe, output of layup_create()
+    :param applied_stress: applied stress resultant [N1, N2, N6] per unit length [Pa m or N/m] in the laminate coordinate system
+    :param applied_moment: applied moment resultant [M1, M2, M6] per unit length [N or Nm/m] in the laminate coordinate system
+    :return: dataframe with one row per ply surface ("Layer #", "T/B") and the safety factor for each failure mode:
+        Max_FT, Max_FC, Max_MT, Max_MC, Max_S (maximum stress), Quad (Tsai-Wu), Hash_FT, Hash_FC, Hash_MT, Hash_MC
+        (Hashin). FT/FC fiber tension/compression, MT/MC matrix tension/compression, S shear. NaN if mode not loaded.
+    """
+    applied_stress = np.asarray(applied_stress, dtype=float)
+    applied_moment = np.asarray(applied_moment, dtype=float)
+
+    # Also adds the Q matrix and TopHeight/BottomHeight columns used below
+    A_matrix, B_matrix, D_matrix = calculate_A_B_D_matrix(lu)
+
+    # Mid-plane strains and curvatures, all in SI units: A [N/m], B [N], D [Nm]
+    ABD_matrix = np.block([
+        [A_matrix * 10 ** 9, B_matrix],
+        [B_matrix, D_matrix]
+    ])
+    strains_curvatures = np.linalg.inv(ABD_matrix) @ np.concatenate([applied_stress, applied_moment])
+    planar_off_axis_strains = strains_curvatures[:3]
+    k_list = strains_curvatures[3:]  # [1/m]
+
+    # Safety factors at the top and bottom surface of each ply
+    max_cols = ["Max_FT", "Max_FC", "Max_MT", "Max_MC", "Max_S"]
+    quad_cols = ["Quad"]
+    hash_cols = ["Hash_FT", "Hash_FC", "Hash_MT", "Hash_MC"]
+
+    data = []
+    for _, layer in lu[lu["Material_name"] != "Core"].iterrows():
+        for location, z in [("Top", layer["TopHeight"]), ("Bottom", layer["BottomHeight"])]:
+            off_axis_strains = planar_off_axis_strains + z * k_list
+            on_axis_strains = _strain_off_to_on(layer["Orientation (deg)"], off_axis_strains)
+            on_axis_stress = layer["Q matrix"] @ on_axis_strains  # [GPa]
+            # round-off noise (e.g. shear in a 0 deg ply under N1) would otherwise give huge R instead of None
+            on_axis_stress[np.abs(on_axis_stress) < 1e-9 * np.max(np.abs(on_axis_stress))] = 0.0
+
+            row = {"Layer #": layer["Layer #"], "T/B": location}
+            row.update(zip(max_cols, _maximum_stress_criterion(layer["Material"], on_axis_stress)))
+            row.update(zip(quad_cols, [_tsai_wu_quadratic_criterion(layer["Material"], on_axis_stress)]))
+            row.update(zip(hash_cols, _hashin_failure_criteria(layer["Material"], on_axis_stress)))
+            data.append(row)
+
+    sf = pd.DataFrame(data)
+    cols = max_cols + quad_cols + hash_cols
+    sf[cols] = sf[cols].astype(float)
+
+    # rounded so that plies with equal R up to round-off are reported in layer order
+    sf_rounded = sf.copy()
+    sf_rounded[cols] = sf_rounded[cols].map(lambda x: round_sig(x, 6))
+
+    print("\nThe Table of Safety Factors is:")
+    print("Top of Laminate")
+    print(tabulate(sf_rounded, headers="keys", tablefmt="psql"))
+    print("Bottom of Laminate")
+    print()
+
+    lowest_R_list = []
+    for criterion, criterion_cols, prefix in [("maximum stress", max_cols, "Max_"),
+                                              ("Quadratic Polynomial", quad_cols, "Quad"),
+                                              ("Hashin", hash_cols, "Hash_")]:
+        print("According to " + criterion + " criteria: ")
+        if sf_rounded[criterion_cols].isna().all().all():
+            print("No ply is loaded")
+            print()
+            continue
+        lowest_R = sf_rounded[criterion_cols].min().min()
+        lowest_R_mode = sf_rounded[criterion_cols].min().idxmin()
+        lowest_R_index = sf_rounded[lowest_R_mode].idxmin()
+        lowest_R_layer = sf_rounded.at[lowest_R_index, "Layer #"]
+        lowest_R_location = sf_rounded.at[lowest_R_index, "T/B"].lower()
+        failure_mode = lowest_R_mode[len(prefix):]
+        print("Layer " + str(lowest_R_layer) + " (" + lowest_R_location + ") will fail first"
+              + (" in " + failure_mode if failure_mode else "") + " with an R of " + str(round_sig(lowest_R, 6)))
+        print("Stress vector at failure: " + str([round_sig(float(x * lowest_R)) for x in applied_stress]))
+        print("Moment vector at failure: " + str([round_sig(float(x * lowest_R)) for x in applied_moment]))
+        print()
+        lowest_R_list.append(lowest_R)
+
+    if lowest_R_list:
+        print("MINIMUM SF IS: " + str(round_sig(min(lowest_R_list), 6)))
+
+    return sf
