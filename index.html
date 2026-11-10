@@ -1,0 +1,1497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Composites Calculator</title>
+<meta name="description" content="Classical laminate theory, tube stiffness, failure and beam calculations in the browser, powered by composites_calculator_lib.py.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg: #F1F3F5; --panel: #FFFFFF; --panel2: #F7F8FA; --ink: #202A35; --muted: #687582; --line: #DCE1E6;
+  --brand: #C74747; --brand-soft: #FAECEC;            /* active navigation, selected controls */
+  --dia: #3689B8; --dia-soft: #E4F0F7; --input: #B5CFDF; /* inputs, diagrams, interactive elements */
+  --good: #32856C; --good-bg: #E6F2EE; --warn: #D39A38; --warn-ink: #7C540A; --warn-bg: #FBF2DF; --bad: #C74747; --bad-bg: #FAECEC;
+  --field: #FFFFFF; --core: #EEEAE0; --core-ink: #7B7259;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --sbw: 212px;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13.5px/1.45 var(--sans); }
+body.sb-collapsed { --sbw: 56px; }
+svg { max-width: 100%; height: auto; display: block; }
+input, select, textarea, button { font: inherit; color: inherit; }
+
+/* ---- shell: sidebar + workspace ---- */
+.shell { display: grid; grid-template-columns: var(--sbw) minmax(0, 1fr); min-height: 100vh; }
+.sidebar { position: sticky; top: 0; height: 100vh; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 13px 14px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.brand .logo { flex: none; width: 28px; height: 28px; border-radius: 6px; background: var(--brand); color: #fff; display: grid; place-items: center; }
+.brand b { font-size: 14px; font-weight: 600; line-height: 1.2; }
+.nav { display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; flex: 1; }
+.nav button, #sbToggle { position: relative; display: flex; align-items: center; gap: 11px; width: 100%; border: 0; background: none; padding: 8px 10px; border-radius: 6px; color: var(--muted); font-weight: 500; text-align: left; white-space: nowrap; cursor: pointer; }
+.nav button svg, #sbToggle svg { flex: none; }
+.nav button:hover, #sbToggle:hover { background: var(--panel2); color: var(--ink); }
+.nav button[aria-current=page] { background: var(--brand-soft); color: var(--brand); }
+.nav button[aria-current=page]::before { content: ""; position: absolute; left: -8px; top: 6px; bottom: 6px; width: 3px; border-radius: 0 3px 3px 0; background: var(--brand); }
+.sbfoot { padding: 8px; border-top: 1px solid var(--line); }
+body.sb-collapsed .sidebar .lbl { display: none; }
+body.sb-collapsed #sbToggle svg { transform: rotate(180deg); }
+#backdrop { display: none; position: fixed; inset: 0; background: rgba(32, 42, 53, 0.35); z-index: 20; }
+#menuBtn { display: none; width: 32px; height: 32px; padding: 0; place-items: center; }
+
+.app { min-width: 0; display: flex; flex-direction: column; }
+.apphead { display: flex; align-items: center; gap: 12px; padding: 7px 20px; min-height: 46px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.apphead .tag { margin: 0; color: var(--muted); font-size: 12.5px; flex: 1; }
+#status { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-ink); border: 1px solid #EBD3A0; white-space: nowrap; }
+#status.ready { background: var(--good-bg); color: var(--good); border-color: #BFDCD2; }
+#status.error { background: var(--bad-bg); color: var(--bad); border-color: #EBC2C2; white-space: normal; }
+.modhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 16px 20px 2px; }
+.modhead h1 { font-size: 19px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.modhead p { margin: 0; color: var(--muted); }
+.workspace { display: grid; grid-template-columns: minmax(330px, 400px) minmax(0, 1fr); gap: 14px; padding: 12px 20px 24px; align-items: start; }
+.workspace.no-layup { grid-template-columns: minmax(0, 1fr); }
+.workspace.no-layup #layupCol { display: none; }
+footer { padding: 0 20px 22px; color: var(--muted); font-size: 12px; }
+@media (max-width: 1020px) { .workspace { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: fixed; z-index: 30; left: 0; top: 0; width: 232px; transform: translateX(-100%); transition: transform 0.18s ease; }
+  body.sb-open .sidebar { transform: none; }
+  body.sb-open #backdrop { display: block; }
+  body.sb-collapsed .sidebar .lbl { display: inline; }
+  .sbfoot { display: none; }
+  #menuBtn { display: grid; }
+  .apphead, .modhead, .workspace, footer { padding-left: 14px; padding-right: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
+
+/* ---- panels ---- */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px 16px; margin-bottom: 14px; }
+.card > h2, .cardhead h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+.card h2 small { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+.cardhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; } .cardhead h2 { margin: 0; }
+.card h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 18px 0 8px; font-weight: 600; }
+.card h3:first-child, .more-b > h3:first-child { margin-top: 0; }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.split > .card { margin-bottom: 0; } .split { margin-bottom: 14px; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px; align-items: start; }
+@media (max-width: 1280px) { .two { grid-template-columns: minmax(0, 1fr); } }
+.diagram { border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); padding: 10px; }
+.diagram svg { margin: 0 auto; }
+#secPreview svg { max-width: 460px; }
+#beamOut .diagram { margin-bottom: 12px; padding: 6px 10px 0; }
+#beamOut .diagram svg { max-width: 420px; }
+
+/* ---- inputs (blue = editable) ---- */
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+input[type=text], input[type=number], select, textarea { width: 100%; height: 32px; padding: 5px 9px; border: 1px solid var(--input); border-radius: 5px; background: var(--field); }
+input[type=number], textarea, .mono { font-family: var(--mono); font-size: 13px; }
+textarea { height: auto; min-height: 132px; resize: vertical; line-height: 1.4; }
+input:hover, select:hover, textarea:hover { border-color: var(--dia); }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--dia); box-shadow: 0 0 0 3px rgba(54, 137, 184, 0.22); }
+button:focus-visible, summary:focus-visible { outline: 2px solid var(--dia); outline-offset: 1px; }
+button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 5px; padding: 5px 10px; }
+button:hover { border-color: var(--dia); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 500; }
+button.primary:hover { filter: brightness(0.94); }
+button.small { font-size: 12px; padding: 2px 8px; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; margin-bottom: 10px; align-items: end; }
+.seqline { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.seqline button { height: 32px; }
+.addbar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; margin: 8px 0 12px; }
+.addbar .grp { font-size: 11.5px; color: var(--muted); margin-right: 1px; }
+.addbar .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.chips button, .addbar button { font-family: var(--mono); font-size: 12px; padding: 2px 9px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.seg button { flex: 1; border: 0; border-radius: 0; background: var(--panel); padding: 6px; font-size: 12.5px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed=true] { background: var(--brand-soft); color: var(--brand); font-weight: 600; box-shadow: inset 0 -2px 0 var(--brand); }
+.hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.note { font-size: 12.5px; padding: 7px 10px; border-radius: 5px; margin: 10px 0; border: 1px solid; border-left-width: 3px; }
+.note.warn { background: var(--warn-bg); color: var(--warn-ink); border-color: #EBD3A0; border-left-color: var(--warn); }
+.note.bad { background: var(--bad-bg); color: #9E2F2F; border-color: #EBC2C2; border-left-color: var(--bad); }
+.note.info { background: var(--dia-soft); color: var(--ink); border-color: #C5DCEA; border-left-color: var(--dia); }
+code { font-family: var(--mono); font-size: 12px; background: var(--panel2); border: 1px solid var(--line); padding: 0 4px; border-radius: 4px; }
+
+/* ---- results: level 1 ---- */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); overflow: hidden; }
+.kpi { padding: 10px 14px 12px; min-width: 0; box-shadow: -1px 0 0 var(--line), 0 -1px 0 var(--line); }
+.kpi-k { font-size: 12px; color: var(--muted); }
+.sym { font-family: var(--mono); color: var(--ink); }
+.kpi-v { font: 600 20px/1.25 var(--mono); margin-top: 3px; overflow-wrap: anywhere; }
+.kpi-v.text { font: 600 15px/1.65 var(--sans); }
+.kpi-v .u, .metrics .u { font: 400 12px var(--sans); color: var(--muted); margin-left: 5px; }
+.kpi.good .kpi-v { color: var(--good); } .kpi.bad .kpi-v { color: var(--bad); }
+.kpi-n { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.chip { display: inline-block; font: 500 11px/1.55 var(--sans); padding: 0 7px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); white-space: nowrap; }
+.chip.good { color: var(--good); background: var(--good-bg); border-color: #BFDCD2; }
+.chip.bad { color: #9E2F2F; background: var(--bad-bg); border-color: #EBC2C2; }
+.chip.warn { color: var(--warn-ink); background: var(--warn-bg); border-color: #EBD3A0; }
+.chip.info { color: #24678D; background: var(--dia-soft); border-color: #C5DCEA; }
+/* ---- results: level 2 ---- */
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); column-gap: 28px; margin: 8px 0 0; }
+.metrics > div { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.metrics dt { color: var(--muted); font-size: 12.5px; }
+.metrics dd { margin: 0; font: 500 13.5px var(--mono); text-align: right; }
+.metrics dd small { display: block; font: 400 11.5px var(--sans); color: var(--muted); }
+/* ---- results: level 3 ---- */
+details.more { margin-top: 12px; border: 1px solid var(--line); border-radius: 6px; }
+details.more > summary { padding: 7px 12px; font-size: 12.5px; font-weight: 500; cursor: pointer; border-radius: 6px; }
+details.more > summary:hover { background: var(--panel2); }
+details.more[open] > summary { border-bottom: 1px solid var(--line); background: var(--panel2); border-radius: 6px 6px 0 0; }
+.more-b { padding: 12px; }
+.more-b > .metrics:first-child { margin-top: 0; }
+pre.log { font: 11.5px/1.45 var(--mono); background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 8px; overflow-x: auto; margin: 0; }
+
+/* ---- layup visualisation ---- */
+.stack { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--panel2); }
+.stack .cap { font-size: 10.5px; color: var(--muted); text-align: center; text-transform: uppercase; letter-spacing: 0.06em; }
+.ply { display: grid; grid-template-columns: 30px minmax(50px, 1fr) 150px; gap: 8px; align-items: center; margin: 2px 0; }
+.ply .n { font: 11px var(--mono); color: var(--muted); text-align: right; }
+.ply .band { height: var(--h, 26px); border-radius: 2px; border: 1px solid var(--c); background-color: color-mix(in srgb, var(--c) 16%, #fff); }
+.ply.core .band { height: 62px; border: 1px dashed var(--core-ink); background: var(--core);
+  background-image: radial-gradient(color-mix(in srgb, var(--core-ink) 45%, transparent) 1.2px, transparent 1.4px); background-size: 9px 9px; }
+.ply .lab { font: 12px var(--mono); line-height: 1.25; white-space: nowrap; }
+.ply .lab small { display: block; font: 10.5px var(--sans); color: var(--muted); max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--c); margin-right: 5px; }
+.stack > .ply { margin-left: 14px; }
+.wov { display: grid; grid-template-columns: 14px minmax(0, 1fr); }
+.wmark { position: relative; }
+.wmark::before { content: ""; position: absolute; inset: 3px 2px 3px 4px; border: 1.5px solid var(--muted); border-right: 0; border-radius: 3px 0 0 3px; }
+
+/* ---- tables ---- */
+table { border-collapse: collapse; width: 100%; }
+.scroll { overflow-x: auto; }
+table.grid th, table.grid td { padding: 5px 9px; border-bottom: 1px solid var(--line); text-align: right; font: 12.5px var(--mono); white-space: nowrap; }
+table.grid th { font: 600 11.5px var(--sans); color: var(--muted); background: var(--panel2); }
+table.grid tr.grp th { text-align: center; border-bottom: 0; padding-bottom: 1px; }
+table.grid tr.grp th.l { text-align: left; vertical-align: bottom; border-bottom: 1px solid var(--line); padding-bottom: 5px; }
+table.grid td:first-child, table.grid th:first-child, table.grid td.l, table.grid th.l { text-align: left; }
+table.grid td:first-child { font-family: var(--sans); font-weight: 500; }
+table.grid td.l { font-family: var(--sans); }
+table.grid tbody tr:hover td { background: var(--panel2); }
+td.fail { color: var(--bad); font-weight: 600; }
+table.grid td.min, table.grid tbody tr:hover td.min { background: var(--dia-soft); font-weight: 600; }
+table.layers td { padding: 3px 4px; }
+table.layers th { font: 600 11.5px var(--sans); color: var(--muted); text-align: left; padding: 3px 4px; }
+table.layers input, table.layers select { height: 28px; padding: 3px 6px; font-size: 12.5px; }
+table.layers td:first-child { font: 12px var(--mono); color: var(--muted); white-space: nowrap; padding-right: 8px; }
+table.layers .edited { border-color: var(--dia); box-shadow: inset 3px 0 0 var(--dia); }
+table.matrix { width: auto; }
+table.matrix td { font: 12.5px var(--mono); text-align: right; padding: 3px 10px; white-space: nowrap; }
+table.matrix tr td:first-child { border-left: 1.5px solid var(--muted); }
+table.matrix tr td:last-child { border-right: 1.5px solid var(--muted); }
+.mhead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 9px; margin: 14px 0 6px; }
+.mhead b { font: 600 13.5px var(--mono); } .mhead span { color: var(--muted); font-size: 12px; } .mhead button { white-space: nowrap; }
+.mats { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, max-content)); gap: 0 30px; }
+button.info { width: 18px; height: 18px; padding: 0; border-radius: 50%; font-size: 11px; line-height: 1; color: var(--dia); border-color: var(--input); }
+.infotext { margin: 0 0 8px; max-width: 64ch; }
+ul.road { margin: 0; padding-left: 18px; } ul.road li { margin-bottom: 10px; } ul.road b { display: block; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="sidebar" id="sidebar" aria-label="Modules">
+  <div class="brand"><span class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg></span><b class="lbl">Composites<br>Calculator</b></div>
+  <nav class="nav">
+    <button data-tab="laminate" title="Laminate" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg><span class="lbl">Laminate</span></button>
+    <button data-tab="tube" title="Tube Stiffness" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg><span class="lbl">Tube Stiffness</span></button>
+    <button data-tab="failure" title="Failure" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 2.5 20h19L12 3.5Z"/><path d="M12 10v4.5"/><path d="M12 17.2v.3"/></svg><span class="lbl">Failure</span></button>
+    <button data-tab="beam" title="Beam" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10h20"/><path d="m5 10-3 6h6l-3-6Z"/><path d="m19 10-3 6h6l-3-6Z"/><path d="M12 2v6"/><path d="m9.5 5.5 2.5 2.5 2.5-2.5"/></svg><span class="lbl">Beam</span></button>
+    <button data-tab="materials" title="Materials" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span class="lbl">Materials</span></button>
+    <button data-tab="upcoming" title="Upcoming" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="lbl">Upcoming</span></button>
+  </nav>
+  <div class="sbfoot"><button id="sbToggle" type="button" aria-controls="sidebar" aria-expanded="true" title="Collapse sidebar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/><path d="M19 5v14"/></svg><span class="lbl">Collapse</span></button></div>
+</aside>
+<div id="backdrop"></div>
+
+<div class="app">
+  <header class="apphead">
+    <button id="menuBtn" type="button" aria-label="Open navigation"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <p class="tag">by Alex L. Composite laminate, tube, failure and beam calculations. Runs fully in browser.</p>
+    <span id="status">Loading Python runtime…</span>
+  </header>
+  <div class="modhead"><h1 id="modTitle">Laminate</h1><p id="modDesc">Thickness, mass and the A, B, D stiffness matrices of the layup, from classical laminate theory.</p></div>
+
+  <main class="workspace" id="workspace">
+    <!-- ============ LAYUP: shared by the Laminate, Tube Stiffness, Failure and Beam modules ============ -->
+    <div id="layupCol">
+      <section class="card">
+        <h2>Layup configuration<small>used by every calculation</small></h2>
+        <div class="row">
+          <div><label for="baseMat">Material (all plies; change single plies under Individual plies)</label><select id="baseMat"></select></div>
+        </div>
+        <label for="seq">Ply sequence, top to bottom, separated by <code>/</code></label>
+        <div class="seqline">
+          <input type="text" id="seq" class="mono" spellcheck="false" autocomplete="off" value="0/45/-45/zc1">
+          <button id="seqBack" type="button" title="Remove the last entry" aria-label="Remove the last entry">⌫</button>
+        </div>
+        <div class="addbar" aria-label="Add to the sequence">
+          <span class="grp">Add ply</span>
+          <button data-tok="0">0°</button><button data-tok="90">90°</button><button data-tok="45">+45°</button><button data-tok="-45">−45°</button>
+          <span class="sep"></span><span class="grp">Woven</span>
+          <button data-tok="+-45" title="Woven ply at ±45°">±45</button><button data-tok="+-0" title="Woven ply at 0/90°">0/90</button>
+          <span class="sep"></span><span class="grp">Core</span>
+          <button data-tok="zc1" title="Core, thickness in cm (edit the number in the sequence)">1 cm</button>
+        </div>
+        <label>Stacking</label>
+        <div class="seg" id="mode">
+          <button data-mode="s" aria-pressed="false" title="Sequence followed by its mirror image">Symmetric</button>
+          <button data-mode="so" aria-pressed="true" title="Mirrored about the last entry, which is not repeated">Symmetric, odd</button>
+          <button data-mode="t" aria-pressed="false" title="Sequence used exactly as typed">Total</button>
+        </div>
+        <p class="hint" id="modeHint"></p>
+        <p class="hint">Entries: an angle in degrees (<code>45</code>), a woven ply (<code>+-45</code>, split into four sub-layers at θ and θ−90), or a core (<code>zc1.5</code>, thickness in cm).</p>
+        <div id="layupError"></div>
+        <div id="layupWarn"></div>
+      </section>
+
+      <section class="card">
+        <h2>Layup visualization<small>follows the configuration above · not to scale</small></h2>
+        <div id="preview"><p class="hint">Waiting for Python…</p></div>
+      </section>
+
+      <section class="card">
+        <div class="cardhead">
+          <h2>Individual plies</h2>
+          <button class="small" id="resetEdits" hidden>Reset edits</button>
+        </div>
+        <div class="scroll"><table class="layers" id="layerTable"></table></div>
+        <p class="hint">Edit a ply's material, thickness or angle here. A woven ply is one row: its thickness is the whole cloth ply and its angle θ puts fibres at θ and θ−90. Changing the sequence or stacking clears these edits.</p>
+      </section>
+    </div>
+
+    <!-- ============ MODULES ============ -->
+    <div>
+      <div class="module" id="tab-laminate">
+        <section class="card"><h2>Laminate results</h2><div id="lamOut"><p class="hint">Waiting for Python…</p></div></section>
+      </div>
+
+      <div class="module" id="tab-tube" hidden>
+        <section class="card">
+          <h2>Tube geometry</h2>
+          <div class="two">
+            <div>
+              <div class="row">
+                <div><label for="secType">Cross-section shape</label>
+                  <select id="secType" class="live">
+                    <option value="circ">Circular</option><option value="rect">Rectangular</option><option value="arb">Arbitrary (points)</option>
+                  </select></div>
+              </div>
+              <div id="secCirc" class="row">
+                <div><label for="dIn">Inner diameter (mm)</label><input type="number" id="dIn" class="live" value="28" min="0" step="any"></div>
+              </div>
+              <div id="secRect" class="row" hidden>
+                <div><label for="rH">Inner height (mm)</label><input type="number" id="rH" class="live" value="10" min="0" step="any"></div>
+                <div><label for="rW">Inner width (mm)</label><input type="number" id="rW" class="live" value="10" min="0" step="any"></div>
+              </div>
+              <div id="secArb" hidden>
+                <div class="row">
+                  <div><label for="surface">The points describe the</label>
+                    <select id="surface" class="live">
+                      <option value="inner">Inner surface (plies built outward, e.g. on a mandrel)</option>
+                      <option value="outer">Outer surface (plies built inward, e.g. in a mould)</option>
+                    </select></div>
+                </div>
+                <label for="pts">Outline points in metres, in order around the section. Header <code>x2,x3</code> or <code>theta_deg,r</code></label>
+                <textarea id="pts" class="live" spellcheck="false">x2,x3
+-0.02,-0.01
+0.02,-0.01
+0.02,0.01
+-0.02,0.01</textarea>
+                <div class="addbar">
+                  <span class="grp">Presets</span>
+                  <button data-ex="rect">Rectangle 40×20 mm</button><button data-ex="ellipse">Ellipse 60×30 mm</button><button data-ex="naca">NACA 0012, 200 mm chord</button>
+                  <span class="sep"></span>
+                  <button id="ptsUploadBtn">Import CSV…</button><input type="file" id="ptsFile" accept=".csv,text/csv,text/plain" hidden>
+                </div>
+              </div>
+              <p class="hint">Layer 1 is the outermost ply of the tube. These calculations assume a symmetric layup.</p>
+            </div>
+            <div class="diagram" id="secPreview"></div>
+          </div>
+          <div id="tubeWarn"></div>
+        </section>
+        <section class="card"><h2>Bending stiffness</h2><div id="bendOut"></div></section>
+        <section class="card">
+          <h2>Torsion<small>thin-walled shear flow</small></h2>
+          <div class="row">
+            <div><label for="torque">Torque T (N·m)</label><input type="number" id="torque" class="live" value="100" step="any"></div>
+            <div><label for="axial">Axial load P (N, tension +)</label><input type="number" id="axial" class="live" value="0" step="any"></div>
+          </div>
+          <div id="torOut"></div>
+        </section>
+      </div>
+
+      <div class="module" id="tab-failure" hidden>
+        <section class="card">
+          <h2>Applied loading<small>on the laminate, per unit width</small></h2>
+          <h3>Stress resultants (N/m)</h3>
+          <div class="row">
+            <div><label for="N1">N₁</label><input type="number" id="N1" class="live" value="100000" step="any"></div>
+            <div><label for="N2">N₂</label><input type="number" id="N2" class="live" value="0" step="any"></div>
+            <div><label for="N6">N₆ (shear)</label><input type="number" id="N6" class="live" value="0" step="any"></div>
+          </div>
+          <h3>Moment resultants (N·m/m)</h3>
+          <div class="row">
+            <div><label for="M1">M₁</label><input type="number" id="M1" class="live" value="0" step="any"></div>
+            <div><label for="M2">M₂</label><input type="number" id="M2" class="live" value="0" step="any"></div>
+            <div><label for="M6">M₆ (twist)</label><input type="number" id="M6" class="live" value="0" step="any"></div>
+          </div>
+          <p class="hint">Safety factor R is the multiple of these loads at which a ply fails. Layer 1 is at the top of the laminate (z = +h/2). Core layers are skipped.</p>
+          <details id="helper" class="more">
+            <summary>Help me work out N and M</summary>
+            <div class="more-b">
+            <div class="row">
+              <div><label for="hType">Starting from</label>
+                <select id="hType" class="hlive">
+                  <option value="panel">Forces and moments on a flat panel or strip</option>
+                  <option value="tube">Loads on a thin-walled circular tube</option>
+                  <option value="stress">Average stresses in the laminate</option>
+                </select></div>
+            </div>
+            <div class="diagram" id="hDiagram" style="margin-bottom:12px"></div>
+            <div id="h_panel">
+              <div class="row">
+                <div><label for="hB">Width b, across the 1 direction (mm)</label><input type="number" id="hB" class="hlive" value="100" min="0" step="any"></div>
+                <div><label for="hA">Length a, along the 1 direction (mm)</label><input type="number" id="hA" class="hlive" value="100" min="0" step="any"></div>
+              </div>
+              <div class="row">
+                <div><label for="hF1">Force F₁ along 1 (N)</label><input type="number" id="hF1" class="hlive" value="1000" step="any"></div>
+                <div><label for="hF2">Force F₂ along 2 (N)</label><input type="number" id="hF2" class="hlive" value="0" step="any"></div>
+                <div><label for="hV">In-plane shear force V on edge b (N)</label><input type="number" id="hV" class="hlive" value="0" step="any"></div>
+              </div>
+              <div class="row">
+                <div><label for="hMb1">Bending moment carried across b (N·m)</label><input type="number" id="hMb1" class="hlive" value="0" step="any"></div>
+                <div><label for="hMb2">Bending moment carried across a (N·m)</label><input type="number" id="hMb2" class="hlive" value="0" step="any"></div>
+              </div>
+              <p class="hint">The 1 direction is the 0° fibre direction. Each load is spread evenly over the edge it acts on.</p>
+            </div>
+            <div id="h_tube" hidden>
+              <div class="row">
+                <div><label for="hD">Mid-wall diameter d (mm)</label><input type="number" id="hD" class="hlive" min="0" step="any"></div>
+                <div><label for="hP">Axial force P (N, tension +)</label><input type="number" id="hP" class="hlive" value="0" step="any"></div>
+                <div><label for="hT">Torque T (N·m)</label><input type="number" id="hT" class="hlive" value="100" step="any"></div>
+              </div>
+              <div class="row">
+                <div><label for="hMb">Bending moment M (N·m)</label><input type="number" id="hMb" class="hlive" value="0" step="any"></div>
+                <div><label for="hPr">Internal pressure p (MPa)</label><input type="number" id="hPr" class="hlive" value="0" step="any"></div>
+              </div>
+              <p class="hint">The 1 direction runs along the tube axis and 2 around the hoop. The bending term is for the wall on the tension side; enter a negative moment to check the compression side.</p>
+            </div>
+            <div id="h_stress" hidden>
+              <div class="row">
+                <div><label for="hS1">σ₁ (MPa)</label><input type="number" id="hS1" class="hlive" value="100" step="any"></div>
+                <div><label for="hS2">σ₂ (MPa)</label><input type="number" id="hS2" class="hlive" value="0" step="any"></div>
+                <div><label for="hS6">τ₆ (MPa)</label><input type="number" id="hS6" class="hlive" value="0" step="any"></div>
+                <div><label for="hTh">Thickness t (mm)</label><input type="number" id="hTh" class="hlive" min="0" step="any"></div>
+              </div>
+              <p class="hint">Stresses averaged over the laminate thickness, e.g. force divided by cross-section area.</p>
+            </div>
+            <div id="hOut"></div>
+            <button class="primary" id="hApply" type="button" style="margin-top:12px">Use these loads</button>
+            </div>
+          </details>
+        </section>
+        <section class="card"><h2>Failure results<small>maximum stress, Tsai-Wu and Hashin criteria</small></h2><div id="failOut"></div></section>
+      </div>
+
+      <div class="module" id="tab-beam" hidden>
+        <div class="split">
+          <section class="card">
+            <h2>Cross-section and stiffness</h2>
+            <div class="row">
+              <div style="grid-column: span 2"><label for="eiSrc">Bending stiffness EI</label><select id="eiSrc" class="live"></select></div>
+              <div id="eiCustomWrap" hidden><label for="eiCustom">EI (N·m²)</label><input type="number" id="eiCustom" class="live" value="1000" min="0" step="any"></div>
+            </div>
+            <div class="note info" id="eiNote" style="margin-bottom:0"></div>
+          </section>
+          <section class="card">
+            <h2>Loading and supports</h2>
+            <div class="row">
+              <div style="grid-column: span 2"><label for="bCase">Supports and load</label>
+                <select id="bCase" class="live">
+                  <option value="ss_point">Simply supported, point load (3-point bend)</option>
+                  <option value="ss_udl">Simply supported, uniform load</option>
+                  <option value="cant_point">Cantilever, point load</option>
+                  <option value="cant_udl">Cantilever, uniform load</option>
+                  <option value="ff_point">Fixed both ends, point load at centre</option>
+                  <option value="ff_udl">Fixed both ends, uniform load</option>
+                </select></div>
+            </div>
+            <div class="row" style="margin-bottom:0">
+              <div><label for="bL">Length L (mm)</label><input type="number" id="bL" class="live" value="1000" min="0" step="any"></div>
+              <div id="bPWrap"><label for="bP">Load P (N)</label><input type="number" id="bP" class="live" value="50" step="any"></div>
+              <div id="bWWrap" hidden><label for="bW">Load w (N/m)</label><input type="number" id="bW" class="live" value="50" step="any"></div>
+              <div id="bAWrap"><label for="bA" id="bALabel">Load position a (mm)</label><input type="number" id="bA" class="live" placeholder="centre" min="0" step="any"></div>
+            </div>
+          </section>
+        </div>
+        <section class="card"><h2>Beam results<small>Euler–Bernoulli bending</small></h2><div id="beamOut"></div></section>
+      </div>
+
+      <div class="module" id="tab-materials" hidden>
+        <section class="card">
+          <h2>Material database<small>ply properties, as supplied to the calculations</small></h2>
+          <div class="scroll"><table class="grid" id="matTable"></table></div>
+          <p class="hint">These are properties of a single ply in its own fibre axes (x along the fibres). Laminate-level properties are calculated in the Laminate module. Database entries are loaded from <code>materials_database.csv</code>.</p>
+        </section>
+        <section class="card">
+          <h2>Add a custom material</h2>
+          <form id="matForm">
+            <div class="row">
+              <div style="grid-column: span 2"><label for="m_name">Name</label><input type="text" id="m_name" required></div>
+              <div><label for="m_source">Source (optional)</label><input type="text" id="m_source" placeholder="e.g. supplier datasheet"></div>
+              <div><label for="m_h0">Ply thickness h₀ (mm)</label><input type="number" id="m_h0" value="0.125" min="0" step="any" required></div>
+              <div><label for="m_rho">Density (kg/m³)</label><input type="number" id="m_rho" value="1600" min="0" step="any" required></div>
+            </div>
+            <div class="row">
+              <div><label for="m_Ex">Ex (GPa)</label><input type="number" id="m_Ex" step="any" min="0" required></div>
+              <div><label for="m_Ey">Ey (GPa)</label><input type="number" id="m_Ey" step="any" min="0" required></div>
+              <div><label for="m_Es">Es (GPa)</label><input type="number" id="m_Es" step="any" min="0" required></div>
+              <div><label for="m_vxy">νxy</label><input type="number" id="m_vxy" step="any" required></div>
+            </div>
+            <div class="row">
+              <div><label for="m_Xt">Xt (MPa)</label><input type="number" id="m_Xt" step="any" min="0" required></div>
+              <div><label for="m_Xc">Xc (MPa)</label><input type="number" id="m_Xc" step="any" min="0" required></div>
+              <div><label for="m_Yt">Yt (MPa)</label><input type="number" id="m_Yt" step="any" min="0" required></div>
+              <div><label for="m_Yc">Yc (MPa)</label><input type="number" id="m_Yc" step="any" min="0" required></div>
+              <div><label for="m_Sc">Sc (MPa)</label><input type="number" id="m_Sc" step="any" min="0" required></div>
+            </div>
+            <button class="primary" type="submit">Add material</button>
+            <span class="hint" id="matFormMsg" style="margin-left:10px"></span>
+          </form>
+          <p class="hint">Custom materials are kept in this browser only.</p>
+        </section>
+      </div>
+
+      <div class="module" id="tab-upcoming" hidden>
+        <section class="card">
+          <h2>Upcoming features</h2>
+          <ul class="road">
+            <li><b>Report an issue</b>A way to report bugs and request features straight from this page.</li>
+            <li><b>Laminate and tube presets</b>Ready-made layups and sections for off-the-shelf parts, such as DragonPlate tubes, so common products can be loaded in one click.</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer id="foot"></footer>
+</div>
+</div>
+
+<!-- ============ PYTHON BRIDGE (runs in Pyodide) ============ -->
+<script type="text/python" id="bridge">
+import contextlib, io, json, math
+import numpy as np
+import pandas as pd
+import composites_calculator_lib as cc
+
+_DB = {}
+_CUSTOM = {}
+_FIELDS = ["Ex", "Ey", "Es", "vxy", "Xt", "Xc", "Yt", "Yc", "Sc"]
+
+
+def _clean(o):
+    if isinstance(o, dict):
+        return {str(k): _clean(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_clean(v) for v in o]
+    if isinstance(o, np.ndarray):
+        return _clean(o.tolist())
+    if isinstance(o, (bool, np.bool_)):
+        return bool(o)
+    if isinstance(o, (float, np.floating)):
+        o = float(o)
+        return o if math.isfinite(o) else None
+    if isinstance(o, np.integer):
+        return int(o)
+    return o
+
+
+def _mat(name):
+    if name in _CUSTOM:
+        return _CUSTOM[name]
+    if name in _DB:
+        return _DB[name]
+    raise ValueError("Unknown material: " + str(name))
+
+
+def _mat_dict(m, custom):
+    d = {f: getattr(m, f) for f in _FIELDS}
+    d.update(name=m.name, h0=m.h0, rho=m.rho, source=m.source, custom=custom)
+    return d
+
+
+def _materials(p):
+    if p.get("csv") is not None:
+        with open("/tmp/materials_database.csv", "w", newline="") as f:
+            f.write(p["csv"])
+        _DB.clear()
+        _DB.update(cc.materials_load("/tmp/materials_database.csv"))
+    _CUSTOM.clear()
+    for c in p.get("custom", []):
+        if c["name"] in _DB:
+            continue
+        _CUSTOM[c["name"]] = cc.Material(
+            c["name"], [float(c["Ex"]), float(c["Ey"]), float(c["Es"]), float(c["vxy"])],
+            [float(c[k]) for k in ("Xt", "Xc", "Yt", "Yc", "Sc")], float(c["h0"]), float(c["rho"]), str(c.get("source") or "Custom"))
+    return {"version": cc.version, "update_date": cc.update_date,
+            "materials": [_mat_dict(m, False) for m in _DB.values()] + [_mat_dict(m, True) for m in _CUSTOM.values()]}
+
+
+def _build(spec):
+    lu = cc.layup_create(spec["template"], _mat(spec["material"]))
+    for k, ov in spec.get("overrides", {}).items():
+        n = int(k)
+        if ov.get("material"):
+            cc.layup_material_change(lu, n, _mat(ov["material"]))
+        if ov.get("thickness") is not None:
+            cc.layup_thickness_change(lu, n, float(ov["thickness"]))
+        if ov.get("orientation") is not None:
+            cc.layup_orientation_change(lu, n, float(ov["orientation"]))
+    return lu
+
+
+def _woven_groups(template):
+    """
+    Which layers came from the same woven (+-) entry, following layup_create()'s expansion.
+    Returns one (group id, role) per layer: role 0 for the sub-layers at theta, 1 for those at theta - 90,
+    and (None, None) for a layer that is not woven.
+    """
+    tokens = template.split("/")
+    kind = tokens.pop() if tokens[-1] in ("s", "t", "so") else "s"
+    out, g = [], 0
+    for t in tokens:
+        if t.strip().lower().startswith("+-"):
+            g += 1
+            out.extend([(g, 0), (g, 1), (g, 0), (g, 1)])
+        else:
+            out.append((None, None))
+    mirror = [(None if i is None else -i, role) for i, role in out[::-1]]
+    if kind == "so":
+        out = out + mirror[1:]
+    elif kind == "s":
+        out = out + mirror
+    return out
+
+
+def _layers(p):
+    """Layer list only (no stiffness), so the preview still works for layups the maths rejects."""
+    lu = _build(p["layup"])
+    woven = _woven_groups(p["layup"]["template"])
+    return [{"num": None if r["Material_name"] == "Core" else int(r["Layer #"]),
+             "is_core": r["Material_name"] == "Core", "material": r["Material_name"],
+             "thickness": r["Thickness (m)"], "orientation": r["Orientation (deg)"],
+             "woven": woven[i][0] if i < len(woven) else None,
+             "role": woven[i][1] if i < len(woven) else None} for i, (_, r) in enumerate(lu.iterrows())]
+
+
+def _laminate(p):
+    lu = _build(p["layup"])
+    h, h_total = cc.layup_calculate_heights(lu)
+    A, B, D = cc.calculate_A_B_D_matrix(lu)
+    C = cc.generate_anisotropic_stiffness_tensor_C(A, B, D, lu)
+    layers = []
+    for _, r in lu.iterrows():
+        core = r["Material_name"] == "Core"
+        layers.append({"num": None if core else int(r["Layer #"]), "is_core": core, "material": r["Material_name"],
+                       "thickness": r["Thickness (m)"], "orientation": r["Orientation (deg)"],
+                       "z_top": r["TopHeight"], "z_bottom": r["BottomHeight"],
+                       "S": r["S matrix"], "Q": r["Q matrix"], "S_off": r["S matrix off"], "Q_off": r["Q matrix off"]})
+    areal = float(sum(r["Thickness (m)"] * r["Material"].rho for _, r in lu.iterrows()))
+    scale = np.max(np.abs(A)) * 1e9 / h_total
+    symmetric = bool(np.max(np.abs(B)) * 6 / h_total ** 2 < 1e-6 * scale)
+    balanced = bool(max(abs(A[0, 2]), abs(A[1, 2])) < 1e-6 * np.max(np.abs(A)))
+    return {"layers": layers, "h": h, "h_total": h_total, "areal_mass": areal, "A": A, "B": B, "D": D, "C": C,
+            "symmetric": symmetric, "balanced": balanced}
+
+
+def _section_csv(s):
+    with open("/tmp/section.csv", "w", newline="") as f:
+        f.write(s["csv"])
+    return "/tmp/section.csv"
+
+
+def _bending(p):
+    lu = _build(p["layup"])
+    A, B, D = cc.calculate_A_B_D_matrix(lu)
+    s = p["section"]
+    if s["type"] == "circ":
+        return {"type": "circ", "Dx": cc.generate_Dx_eq_circ_tube(A, D, s["d_in"], lu)}
+    if s["type"] == "rect":
+        return {"type": "rect", "EI": cc.generate_EIeq_rect_tube(A, D, s["height"], s["width"], lu)}
+    out = cc.generate_EIeq_arbitrary_tube(_section_csv(s), lu, s["surface"])
+    out["type"] = "arb"
+    return out
+
+
+def _torsion(p):
+    lu = _build(p["layup"])
+    A, B, D = cc.calculate_A_B_D_matrix(lu)
+    s = p["section"]
+    if s["type"] == "circ":
+        out = cc.generate_torsion_circ_tube(A, s["d_in"], lu, p["torque"], p["axial"])
+        wall_length = 2 * np.pi * (s["d_in"] / 2 + lu["Thickness (m)"].sum() / 2)
+    else:
+        out = cc.generate_torsion_arbitrary_tube(_section_csv(s), lu, p["torque"], p["axial"], s["surface"])
+        wall_length = out["perimeter"]
+    # the tube wall is a laminate carrying the axial load per unit length of wall and the shear flow
+    out["wall_N"] = [p["axial"] / wall_length, 0.0, out["shear_flow"]]
+    out["lowest"] = _lowest(p["layup"], out["wall_N"], [0.0, 0.0, 0.0])
+    return out
+
+
+def _safety(spec, N, M):
+    lu = _build(spec)
+    sf = cc.calculate_safety_factors(lu, np.array(N, dtype=float), np.array(M, dtype=float))
+    groups = {"max": ["Max_FT", "Max_FC", "Max_MT", "Max_MC", "Max_S"], "quad": ["Quad"],
+              "hashin": ["Hash_FT", "Hash_FC", "Hash_MT", "Hash_MC"]}
+    cols = sum(groups.values(), [])
+    sfr = sf.copy()
+    sfr[cols] = sfr[cols].map(lambda x: cc.round_sig(x, 6))
+    summary = {}
+    for key, gcols in groups.items():
+        if sfr[gcols].isna().all().all():
+            summary[key] = None
+            continue
+        mode = sfr[gcols].min().idxmin()
+        idx = sfr[mode].idxmin()
+        summary[key] = {"R": sfr[gcols].min().min(), "mode": mode, "row": int(idx),
+                        "layer": int(sfr.at[idx, "Layer #"]), "location": sfr.at[idx, "T/B"]}
+    rows = [{"layer": int(r["Layer #"]), "loc": r["T/B"], **{c: r[c] for c in cols}} for _, r in sfr.iterrows()]
+    return {"cols": cols, "rows": rows, "summary": summary}
+
+
+def _failure(p):
+    return _safety(p["layup"], p["N"], p["M"])
+
+
+def _lowest(spec, N, M):
+    """Lowest safety factor over the three criteria, with where it occurs. None if no ply is loaded."""
+    best = None
+    for key, s in _safety(spec, N, M)["summary"].items():
+        if s and (best is None or s["R"] < best["R"]):
+            best = dict(s, criterion=key)
+    return best
+
+
+def _wall_bending(p):
+    """
+    Lowest safety factor of a tube wall in beam bending. The wall is loaded with the N1 and M1 that give it the
+    beam's axial strain at mid-wall and the beam's curvature through its thickness (all other resultants zero),
+    and is checked on the tension and compression sides.
+    """
+    lu = _build(p["layup"])
+    A, B, D = cc.calculate_A_B_D_matrix(lu)
+    abd = np.linalg.inv(np.block([[A * 10 ** 9, B], [B, D]]))
+    N1, M1 = np.linalg.solve(np.array([[abd[0, 0], abd[0, 3]], [abd[3, 0], abd[3, 3]]]),
+                             np.array([p["strain"], p["curvature"]], dtype=float))
+    best = None
+    for side, sign in (("tension", 1.0), ("compression", -1.0)):
+        low = _lowest(p["layup"], [sign * N1, 0.0, 0.0], [sign * M1, 0.0, 0.0])
+        if low and (best is None or low["R"] < best["R"]):
+            best = dict(low, side=side)
+    return {"lowest": best, "N1": N1, "M1": M1}
+
+
+_API = {"materials": _materials, "layers": _layers, "laminate": _laminate, "bending": _bending,
+        "torsion": _torsion, "failure": _failure, "wall_bending": _wall_bending}
+
+
+def api(name, payload):
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            out = _API[name](json.loads(payload))
+        return json.dumps({"ok": True, "result": _clean(out), "log": buf.getvalue()})
+    except Exception as e:
+        msg = str(e) if isinstance(e, ValueError) else type(e).__name__ + ": " + str(e)
+        return json.dumps({"ok": False, "error": msg, "log": buf.getvalue()})
+</script>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+"use strict";
+const LIB_URL = "composites_calculator_lib.py";
+const DB_URL = "materials_database.csv";
+const CUSTOM_KEY = "composites_calculator_custom_materials";
+const PALETTE = ["#3689B8", "#B8742A", "#32856C", "#8A5BA8", "#6F8F1F", "#C74747", "#5B6FBF", "#8A6D1C"];
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const state = { mode: "so", overrides: {}, materials: [], lam: null, layers: null, bend: null, tor: null };
+let pyApi = null;
+
+// ---------- formatting ----------
+function fmt(x, sig = 4) {
+  if (x === null || x === undefined || Number.isNaN(x)) return "—";
+  if (x === 0) return "0";
+  const a = Math.abs(x);
+  if (a >= 1e6 || a < 1e-3) return x.toExponential(sig - 1).replace("e+", "e");
+  return String(parseFloat(x.toPrecision(sig)));
+}
+const trim6 = (x) => parseFloat(Number(x).toPrecision(6));
+function matrixHTML(M) {
+  const max = Math.max(...M.flat().map((v) => Math.abs(v ?? 0)));
+  return '<div class="scroll"><table class="matrix">' + M.map((r) => "<tr>" + r.map((v) =>
+    `<td>${fmt(Math.abs(v ?? 0) < max * 1e-9 ? 0 : v)}</td>`).join("") + "</tr>").join("") + "</table></div>";
+}
+let copyStore = [];
+function matrixBlock(title, unit, M, info = "") {
+  copyStore.push(M.map((r) => r.join(",")).join("\n"));
+  const key = "info-" + title;
+  const help = info ? `<button class="info" type="button" data-info="${key}" title="${esc(info)}" aria-label="What is the ${title} matrix?">?</button>` : "";
+  return `<div class="mhead"><b>${title}</b>${help}<span>${unit}</span><button class="small" data-copy="${copyStore.length - 1}">Copy CSV</button></div>` +
+    (info ? `<p class="hint infotext"${isOpen(key) ? "" : " hidden"}>${esc(info)}</p>` : "") + matrixHTML(M);
+}
+const MATRIX_INFO = {
+  A: "Extensional stiffness. Links in-plane forces per unit width N to mid-plane strains: N = A·ε. Non-zero A16 or A26 means pulling the laminate also shears it (unbalanced layup).",
+  B: "Coupling stiffness. Links in-plane forces to curvature, and moments to strain: N = A·ε + B·κ, M = B·ε + D·κ. Zero for a symmetric layup; otherwise pulling the laminate also bends or twists it.",
+  D: "Bending stiffness. Links moments per unit width M to curvatures: M = D·κ. It depends strongly on how far each ply is from the mid-plane. Non-zero D16 or D26 means bending also twists the laminate.",
+  C: "A, B and D divided by the thickness so that every term is in GPa, like a material modulus: A* = A/h, B* = 6B/h², D* = 12D/h³, arranged as [A* B*; B* D*]. A* is the laminate's effective in-plane stiffness and D* its effective bending stiffness; they are equal for a homogeneous plate, so the difference shows the effect of stacking order. C still links strains and curvatures to N and M: it is not a 3D solid stiffness tensor, so give FE shell elements A, B and D instead.",
+};
+const CRIT_NAMES = { max: "maximum stress", quad: "Tsai-Wu", hashin: "Hashin" };
+function lowestKpi(low, extra = "") {
+  if (!low) return { name: "Lowest safety factor", sym: "R", value: "—", note: "no ply is loaded" };
+  const mode = MODE_NAMES[low.mode.split("_")[1]], ok = low.R >= 1;
+  return { name: "Lowest safety factor", sym: "R", value: fmt(low.R, 4), tone: ok ? "good" : "bad",
+    note: `${chip(ok ? "good" : "bad", ok ? "No ply failure" : "Ply failure")} ${CRIT_NAMES[low.criterion]}, layer ${low.layer} ${low.location.toLowerCase()}${mode ? ", " + mode : ""}${extra}` };
+}
+// ---------- result presentation: three levels ----------
+const openState = {};  // expandable sections and notes the user has opened, so a recalculation does not close them
+const isOpen = (key, byDefault = false) => (key in openState ? openState[key] : byDefault);
+const symHTML = (s) => (s ? ` <span class="sym">${s}</span>` : "");
+const unitHTML = (u) => (u ? `<span class="u">${u}</span>` : "");
+const chip = (tone, text) => `<span class="chip ${tone}">${text}</span>`;
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+// level 1: the few results to read first
+function primary(items) {
+  return '<div class="kpis">' + items.filter(Boolean).map((it) =>
+    `<div class="kpi${it.tone ? " " + it.tone : ""}"><div class="kpi-k">${it.name}${symHTML(it.sym)}</div>` +
+    `<div class="kpi-v${it.text ? " text" : ""}">${it.value}${unitHTML(it.unit)}</div>` + (it.note ? `<div class="kpi-n">${it.note}</div>` : "") + "</div>").join("") + "</div>";
+}
+// level 2: supporting values, always visible
+function secondary(items) {
+  return '<dl class="metrics">' + items.filter(Boolean).map((it) =>
+    `<div><dt>${it.name}${symHTML(it.sym)}</dt><dd>${it.value}${unitHTML(it.unit)}${it.note ? `<small>${it.note}</small>` : ""}</dd></div>`).join("") + "</dl>";
+}
+// level 3: detail behind an expandable section
+function more(key, title, html, byDefault = false) {
+  return html ? `<details class="more" data-key="${key}"${isOpen(key, byDefault) ? " open" : ""}><summary>${title}</summary><div class="more-b">${html}</div></details>` : "";
+}
+const logBlock = (log) => (log && log.trim() ? `<h3>Library output</h3><pre class="log">${esc(log.trim())}</pre>` : "");
+const errHTML = (msg) => `<div class="note bad">${esc(msg)}</div>`;
+function numVal(id) { const v = parseFloat($(id).value); return Number.isFinite(v) ? v : NaN; }
+
+// ---------- python ----------
+function call(name, payload) { return JSON.parse(pyApi(name, JSON.stringify(payload))); }
+
+async function boot() {
+  const status = $("status");
+  try {
+    const [libResp, dbResp] = await Promise.all([fetch(LIB_URL), fetch(DB_URL)]);
+    if (!libResp.ok) throw new Error(`Could not load ${LIB_URL} (${libResp.status}). It must sit next to this page.`);
+    if (!dbResp.ok) throw new Error(`Could not load ${DB_URL} (${dbResp.status}). It must sit next to this page.`);
+    const [libSrc, dbCsv] = await Promise.all([libResp.text(), dbResp.text()]);
+    const pyodide = await loadPyodide();
+    status.textContent = "Loading numpy and pandas…";
+    await pyodide.loadPackage(["numpy", "pandas", "micropip"]);
+    try {
+      await pyodide.runPythonAsync('import micropip\nawait micropip.install("tabulate")');
+    } catch (e) {
+      // tabulate only formats the library's printed tables; fall back to plain text if it cannot be downloaded
+      pyodide.runPython('import sys, types\n_t = types.ModuleType("tabulate")\n_t.tabulate = lambda data, *a, **k: data.to_string() if hasattr(data, "to_string") else str(data)\nsys.modules["tabulate"] = _t');
+    }
+    pyodide.FS.writeFile("composites_calculator_lib.py", libSrc);
+    pyodide.runPython($("bridge").textContent);
+    pyApi = pyodide.globals.get("api");
+    const r = call("materials", { csv: dbCsv, custom: loadCustom() });
+    if (!r.ok) throw new Error(r.error);
+    applyMaterials(r.result, true);
+    status.textContent = `Ready · CC lib v${r.result.version}`;
+    status.className = "ready";
+    $("foot").textContent = `composites_calculator_lib v${r.result.version} (${r.result.update_date}) · Python runs locally via Pyodide.`;
+    recalc();
+  } catch (e) {
+    status.textContent = "Failed to start: " + (e.message || e) + (location.protocol === "file:" ? " Open this page through a web server, not as a file." : "");
+    status.className = "error";
+  }
+}
+
+// ---------- materials ----------
+function loadCustom() { try { return JSON.parse(localStorage.getItem(CUSTOM_KEY)) || []; } catch (e) { return []; } }
+function saveCustom(list) { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list)); } catch (e) { /* stays for this visit only */ } }
+function matByName(n) { return state.materials.find((m) => m.name === n); }
+function matOptions(sel) { return state.materials.map((m) => `<option value="${esc(m.name)}"${m.name === sel ? " selected" : ""}>${esc(m.name)}</option>`).join(""); }
+
+function applyMaterials(res, first) {
+  state.materials = res.materials;
+  const base = $("baseMat");
+  const keep = first ? "Graphite_Epoxy_T300_N5208" : base.value;
+  base.innerHTML = matOptions(matByName(keep) ? keep : state.materials[0].name);
+  const cols = ["Ex", "Ey", "Es", "vxy", "Xt", "Xc", "Yt", "Yc", "Sc"];
+  const sub = (a, b) => `${a}<sub>${b}</sub>`;
+  $("matTable").innerHTML =
+    '<thead><tr class="grp"><th rowspan="2" class="l">Material</th><th rowspan="2" class="l">Origin</th><th colspan="4">Elastic properties</th>' +
+    '<th colspan="5">Strengths (MPa)</th><th colspan="2">Ply</th><th rowspan="2" class="l">Source</th><th rowspan="2"></th></tr>' +
+    `<tr><th>${sub("E", "x")} (GPa)</th><th>${sub("E", "y")} (GPa)</th><th>${sub("E", "s")} (GPa)</th><th>${sub("ν", "xy")}</th>` +
+    `<th>${sub("X", "t")}</th><th>${sub("X", "c")}</th><th>${sub("Y", "t")}</th><th>${sub("Y", "c")}</th><th>${sub("S", "c")}</th><th>h₀ (mm)</th><th>ρ (kg/m³)</th></tr></thead><tbody>` +
+    state.materials.map((m) => `<tr><td>${esc(m.name)}</td><td class="l">${chip(m.custom ? "info" : "neutral", m.custom ? "Custom" : "Database")}</td>` +
+      `${cols.map((c) => `<td>${fmt(m[c])}</td>`).join("")}<td>${fmt(m.h0 * 1000)}</td><td>${fmt(m.rho)}</td><td class="l">${esc(m.source)}</td>` +
+      `<td>${m.custom ? `<button class="small" data-del="${esc(m.name)}">Remove</button>` : ""}</td></tr>`).join("") + "</tbody>";
+}
+function refreshMaterials(custom) {
+  saveCustom(custom);
+  const r = call("materials", { csv: null, custom });
+  if (r.ok) applyMaterials(r.result, false);
+  // drop per-layer edits that point at a material which no longer exists
+  for (const ov of Object.values(state.overrides)) if (ov.material && !matByName(ov.material)) delete ov.material;
+  recalc();
+}
+
+// ---------- layup spec ----------
+function tokens() { return $("seq").value.split("/").map((t) => t.trim()).filter(Boolean); }
+function layupSpec() {
+  const toks = tokens();
+  if (!toks.length) return null;
+  return { template: toks.join("/") + "/" + state.mode, material: $("baseMat").value, overrides: state.overrides };
+}
+function setMode(m) {
+  state.mode = m;
+  document.querySelectorAll("#mode button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  $("modeHint").textContent = {
+    s: "The sequence is followed by its mirror image: 0/45 becomes 0/45/45/0. A core entered last appears twice.",
+    so: "Mirrored about the last entry, which is not repeated: 0/45/zc1 becomes 0/45/core/45/0.",
+    t: "The sequence is the whole laminate, exactly as typed.",
+  }[m];
+}
+function normaliseSeq() {
+  // a trailing s / so / t typed into the sequence selects the stacking instead
+  const toks = tokens();
+  const last = (toks[toks.length - 1] || "").toLowerCase();
+  if (["s", "so", "t"].includes(last)) { toks.pop(); $("seq").value = toks.join("/"); setMode(last); }
+}
+
+// ---------- rendering: layup ----------
+function layupWarnings(layers) {
+  const out = [], toks = tokens(), last = (toks[toks.length - 1] || "").toLowerCase();
+  if (state.mode === "so" && last.startsWith("+-")) {
+    out.push("The last entry is a woven ply. “Symmetric, odd” mirrors about one of its four sub-layers rather than the whole ply, " +
+      "so the mirrored half gets a woven ply with only three sub-layers. Use Symmetric to repeat the whole woven ply, or Total and type the full sequence.");
+  }
+  const cores = layers.filter((l) => l.is_core).length;
+  if (cores > 1) {
+    out.push(`This layup has ${cores} core layers.` + (state.mode === "s" && last.startsWith("zc")
+      ? " “Symmetric” repeats a core entered last, giving two cores back to back; use “Symmetric, odd” for a single core in the middle."
+      : " Check that this is what you intend; a sandwich normally has one core."));
+  }
+  return out;
+}
+
+function colourMap(layers) {
+  const map = {};
+  for (const l of layers) if (!l.is_core && !(l.material in map)) map[l.material] = PALETTE[Object.keys(map).length % PALETTE.length];
+  return map;
+}
+function renderPreview(layers) {
+  const colours = colourMap(layers);
+  // band height ranks the ply thicknesses (thinnest to thickest), so different thicknesses are visible without being to scale
+  const sizes = [...new Set(layers.filter((l) => !l.is_core).map((l) => trim6(l.thickness)))].sort((a, b) => a - b);
+  const height = (t) => (sizes.length < 2 ? 26 : Math.round(15 + (19 * sizes.indexOf(trim6(t))) / (sizes.length - 1)));
+  const row = (l) => {
+    const mm = fmt(l.thickness * 1000);
+    if (l.is_core) return `<div class="ply core"><span class="n"></span><div class="band"></div><div class="lab">core · ${mm} mm</div></div>`;
+    const c = colours[l.material], h = height(l.thickness);
+    const stripes = `repeating-linear-gradient(${-l.orientation}deg, transparent 0 5px, color-mix(in srgb, ${c} 75%, transparent) 5px 6.5px)`;
+    return `<div class="ply" style="--h:${h}px" title="${esc(l.material)}"><span class="n">${l.num}</span><div class="band" style="--c:${c};background-image:${stripes}"></div>` +
+      `<div class="lab">${trim6(l.orientation)}° · ${mm} mm${h >= 24 ? `<small>${esc(l.material)}</small>` : ""}</div></div>`;
+  };
+  let rows = "", anyWoven = false;
+  for (let i = 0; i < layers.length; ) {
+    const g = layers[i].woven;
+    if (g === null || g === undefined) { rows += row(layers[i++]); continue; }
+    let inner = "";
+    while (i < layers.length && layers[i].woven === g) inner += row(layers[i++]);
+    anyWoven = true;
+    rows += `<div class="wov" title="These sub-layers together are one woven ply"><div class="wmark"></div><div>${inner}</div></div>`;
+  }
+  const legend = Object.entries(colours).map(([n, c]) => `<span><i style="--c:${c}"></i>${esc(n)}</span>`).join("");
+  $("preview").innerHTML = `<div class="stack"><div class="cap">Top · z = +h/2</div>${rows}<div class="cap">Bottom · z = −h/2</div></div>` +
+    `<div class="legend">${legend}<span>Hatch angle = ply orientation</span>${sizes.length > 1 ? "<span>Taller band = thicker ply</span>" : ""}${anyWoven ? "<span>Bracket = one woven ply</span>" : ""}</div>`;
+}
+function renderLayerTable(layers) {
+  state.layers = layers;
+  const rows = [];
+  for (let i = 0; i < layers.length; ) {
+    const l = layers[i++];
+    if (l.is_core) { rows.push(`<tr><td>—</td><td>Core</td><td class="mono">${fmt(l.thickness * 1000)}</td><td>—</td></tr>`); continue; }
+    // the sub-layers of one woven ply share a row: one material, the thickness of the whole ply, and the weave angle
+    const woven = l.woven !== null && l.woven !== undefined, members = [l];
+    while (woven && i < layers.length && layers[i].woven === l.woven) members.push(layers[i++]);
+    const nums = members.map((m) => m.num), last = nums[nums.length - 1];
+    const ed = (f) => (nums.some((n) => (state.overrides[n] || {})[f] !== undefined) ? ' class="edited"' : "");
+    const lead = members.find((m) => m.role === 0) || l, thick = members.reduce((sum, m) => sum + m.thickness, 0);
+    const name = woven ? `Woven ply (layers ${nums[0]} to ${last})` : `Layer ${l.num}`;
+    rows.push(`<tr data-n="${nums.join(",")}"${woven ? ` title="One woven ply, calculated as ${nums.length} sub-layers at θ and θ−90"` : ""}><td>${woven ? `${nums[0]}–${last}` : l.num}</td>` +
+      `<td><select data-f="material"${ed("material")} aria-label="${name} material">${matOptions(l.material)}</select></td>` +
+      `<td><input type="number" step="any" min="0" data-f="thickness"${ed("thickness")} value="${trim6(thick * 1000)}" aria-label="${name} thickness"></td>` +
+      `<td><input type="number" step="any" data-f="orientation"${ed("orientation")} value="${trim6(lead.orientation)}" aria-label="${name} angle"></td></tr>`);
+  }
+  $("layerTable").innerHTML = "<tr><th>#</th><th>Material</th><th>Thickness (mm)</th><th>Angle (°)</th></tr>" + rows.join("");
+  $("resetEdits").hidden = !Object.values(state.overrides).some((o) => Object.keys(o).length);
+}
+
+// ---------- rendering: laminate ----------
+function renderLaminate(r, log) {
+  copyStore = [];
+  const plies = r.layers.filter((l) => !l.is_core).map((l) =>
+    `<h3>Layer ${l.num} · ${trim6(l.orientation)}° · ${esc(l.material)}</h3><div class="mats">` +
+    [["Q on-axis", "GPa", l.Q], ["Q off-axis", "GPa", l.Q_off], ["S on-axis", "1/GPa", l.S], ["S off-axis", "1/GPa", l.S_off]]
+      .map(([t, u, M]) => `<div>${matrixBlock(t, u, M)}</div>`).join("") + "</div>").join("");
+  $("lamOut").innerHTML =
+    primary([
+      { name: "Laminate Thickness", sym: "h", value: fmt(r.h * 1000), unit: "mm", note: "plies only" },
+      { name: "Total thickness", sym: "h<sub>total</sub>", value: fmt(r.h_total * 1000), unit: "mm", note: "including core" },
+      { name: "Areal mass", value: fmt(r.areal_mass), unit: "kg/m²" },
+      { name: "Layup type", text: true, value: chip(r.symmetric ? "good" : "warn", r.symmetric ? "Symmetric" : "Unsymmetric") + " " + chip(r.balanced ? "good" : "warn", r.balanced ? "Balanced" : "Unbalanced") },
+    ]) +
+    "<h3>Laminate stiffness matrices</h3>" + '<div class="mats">' +
+    `<div>${matrixBlock("A", "GPa·m (10⁹ N/m)", r.A, MATRIX_INFO.A)}</div><div>${matrixBlock("B", "N", r.symmetric ? r.B.map((row) => row.map(() => 0)) : r.B, MATRIX_INFO.B)}</div><div>${matrixBlock("D", "N·m", r.D, MATRIX_INFO.D)}</div></div>` +
+    matrixBlock("C", "GPa · normalised stiffness [A* B*; B* D*]", r.C, MATRIX_INFO.C) +
+    more("lam-plies", "Detailed results: per-ply S and Q matrices", plies) + more("lam-log", "Additional information: library output", logBlock(log));
+}
+
+// ---------- tube section ----------
+function examplePoints(kind) {
+  const rows = ["x2,x3"];
+  const p = (x, y) => rows.push(`${trim6(x)},${trim6(y)}`);
+  if (kind === "rect") { p(-0.02, -0.01); p(0.02, -0.01); p(0.02, 0.01); p(-0.02, 0.01); }
+  if (kind === "ellipse") for (let i = 0; i < 72; i++) p(0.03 * Math.cos((i * Math.PI) / 36), 0.015 * Math.sin((i * Math.PI) / 36));
+  if (kind === "naca") {
+    const c = 0.2, n = 40;
+    const yt = (x) => 0.6 * (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1036 * x ** 4);
+    for (let i = 0; i <= n; i++) { const x = (1 + Math.cos((Math.PI * i) / n)) / 2; p(x * c, yt(x) * c); }
+    for (let i = 1; i < n; i++) { const x = (1 - Math.cos((Math.PI * i) / n)) / 2; p(x * c, -yt(x) * c); }
+  }
+  return rows.join("\n");
+}
+function parsePoints(text) {
+  const lines = text.trim().split(/\r?\n/).map((l) => l.split(",").map((c) => c.trim()));
+  if (lines.length < 2) return null;
+  const head = lines[0].map((c) => c.toLowerCase());
+  const polar = head.includes("theta_deg") && head.includes("r");
+  const i = head.indexOf(polar ? "theta_deg" : "x2"), j = head.indexOf(polar ? "r" : "x3");
+  if (i < 0 || j < 0) return null;
+  const pts = [];
+  for (const l of lines.slice(1)) {
+    const a = parseFloat(l[i]), b = parseFloat(l[j]);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    pts.push(polar ? [b * Math.cos((a * Math.PI) / 180), b * Math.sin((a * Math.PI) / 180)] : [a, b]);
+  }
+  return pts.length >= 3 ? pts : null;
+}
+// small SVG drawing helpers
+function svgHead(x, y, ang, col) {
+  const c = Math.cos(ang), s = Math.sin(ang), pt = (dx, dy) => `${(x + dx * c - dy * s).toFixed(1)},${(y + dx * s + dy * c).toFixed(1)}`;
+  return `<polygon points="${pt(0, 0)} ${pt(-8, -3.5)} ${pt(-8, 3.5)}" fill="${col}"/>`;
+}
+function svgArrow(x1, y1, x2, y2, col, w = 1.6) {
+  const ang = Math.atan2(y2 - y1, x2 - x1);
+  return `<line x1="${x1}" y1="${y1}" x2="${(x2 - 5 * Math.cos(ang)).toFixed(1)}" y2="${(y2 - 5 * Math.sin(ang)).toFixed(1)}" stroke="${col}" stroke-width="${w}"/>` + svgHead(x2, y2, ang, col);
+}
+// circular arc from angle a0 to a1 (degrees, clockwise on screen from the +x direction) ending in an arrow head
+function svgArc(cx, cy, r, a0, a1, col) {
+  const rad = (a) => (a * Math.PI) / 180, px = (a) => cx + r * Math.cos(rad(a)), py = (a) => cy + r * Math.sin(rad(a)), inc = a1 > a0;
+  const tangent = rad(a1) + (inc ? Math.PI / 2 : -Math.PI / 2), back = a1 + (inc ? -1 : 1) * (5 / r) * (180 / Math.PI);
+  return `<path d="M${px(a0).toFixed(1)} ${py(a0).toFixed(1)}A${r} ${r} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} ${inc ? 1 : 0} ${px(back).toFixed(1)} ${py(back).toFixed(1)}" fill="none" stroke="${col}" stroke-width="1.6"/>` +
+    svgHead(px(a1), py(a1), tangent, col);
+}
+const svgText = (x, y, t, col = "var(--ink)", anchor = "middle", size = 11) => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}" fill="${col}">${t}</text>`;
+
+function rectCorners(w, h) { return [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]]; }
+function sectionSpec() {
+  const type = $("secType").value;
+  if (type === "circ") { const d = numVal("dIn") / 1000; return d > 0 ? { type, d_in: d } : { error: "Enter an inner diameter greater than zero." }; }
+  if (type === "rect") {
+    const h = numVal("rH") / 1000, w = numVal("rW") / 1000;
+    return h > 0 && w > 0 ? { type, height: h, width: w } : { error: "Enter an inner height and width greater than zero." };
+  }
+  return { type, csv: $("pts").value, surface: $("surface").value };
+}
+function renderSectionPreview(sec) {
+  let pts = null, label = "inner surface";
+  if (sec.type === "circ") pts = Array.from({ length: 72 }, (_, i) => [(sec.d_in / 2) * Math.cos((i * Math.PI) / 36), (sec.d_in / 2) * Math.sin((i * Math.PI) / 36)]);
+  else if (sec.type === "rect") pts = rectCorners(sec.width, sec.height);
+  else if (sec.type === "arb") { pts = parsePoints(sec.csv); label = sec.surface + " surface"; }
+  if (!pts) { $("secPreview").innerHTML = ""; return; }
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  // the shape sits above a strip that is kept clear for the axis arrows, so they never cover it
+  const W = 420, H = 290, strip = 50, pad = 18, s = Math.min((W - 2 * pad) / (x1 - x0 || 1), (H - strip - 2 * pad) / (y1 - y0 || 1));
+  const X = (x) => W / 2 + (x - (x0 + x1) / 2) * s, Y = (y) => (H - strip) / 2 - (y - (y0 + y1) / 2) * s;
+  const ox = 14, oy = H - 12, ax = "var(--muted)";
+  $("secPreview").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cross-section outline with the x2 axis pointing right and the x3 axis pointing up">` +
+    `<polygon points="${pts.map((p) => X(p[0]).toFixed(1) + "," + Y(p[1]).toFixed(1)).join(" ")}" fill="var(--dia-soft)" stroke="var(--dia)" stroke-width="1.5" stroke-linejoin="round"/>` +
+    svgArrow(ox, oy, ox + 32, oy, ax) + svgArrow(ox, oy, ox, oy - 32, ax) + svgText(ox + 37, oy + 4, "x2", ax, "start") + svgText(ox + 7, oy - 24, "x3", ax, "start") + "</svg>" +
+    `<p class="hint" style="text-align:center;margin-top:4px">${label} · ${fmt((x1 - x0) * 1000)} × ${fmt((y1 - y0) * 1000)} mm</p>`;
+}
+
+function renderTube(spec) {
+  const type = $("secType").value;
+  $("secCirc").hidden = type !== "circ"; $("secRect").hidden = type !== "rect"; $("secArb").hidden = type !== "arb";
+  const sec = sectionSpec();
+  state.bend = null; state.tor = null; state.sec = sec.error ? null : sec;
+  $("tubeWarn").innerHTML = state.lam && !state.lam.symmetric ? '<div class="note warn">This layup is not symmetric. The tube calculations assume a symmetric layup, so treat these results with care.</div>' : "";
+  if (sec.error) { $("secPreview").innerHTML = ""; $("bendOut").innerHTML = errHTML(sec.error); $("torOut").innerHTML = ""; return; }
+  renderSectionPreview(sec);
+
+  const b = call("bending", { layup: spec, section: sec });
+  if (!b.ok) $("bendOut").innerHTML = errHTML(b.error);
+  else {
+    const r = b.result; state.bend = r;
+    let html, extra = "";
+    if (r.type === "circ") html = primary([{ name: "Equivalent bending stiffness", sym: "D<sub>x</sub>", value: fmt(r.Dx, 5), unit: "N·m²", note: "EI of the circular tube, the same about every axis" }]);
+    else if (r.type === "rect") html = primary([{ name: "Equivalent bending stiffness", sym: "EI", value: fmt(r.EI, 5), unit: "N·m²", note: "bending about the width axis" }]);
+    else {
+      html = primary([
+        { name: "Bending stiffness about x2", sym: "EI<sub>2</sub>", value: fmt(r.EI_2, 5), unit: "N·m²" },
+        { name: "Bending stiffness about x3", sym: "EI<sub>3</sub>", value: fmt(r.EI_3, 5), unit: "N·m²" },
+      ]) + secondary([
+        { name: "Coupling stiffness", sym: "EI<sub>23</sub>", value: fmt(Math.abs(r.EI_23) < 1e-9 * r.EI_max ? 0 : r.EI_23, 5), unit: "N·m²" },
+        { name: "Maximum principal stiffness", sym: "EI<sub>max</sub>", value: fmt(r.EI_max, 5), unit: "N·m²" },
+        { name: "Minimum principal stiffness", sym: "EI<sub>min</sub>", value: fmt(r.EI_min, 5), unit: "N·m²" },
+        { name: "Principal axis orientation", value: fmt(r.principal_angle_deg), unit: "°", note: "EI max axis, from x2 toward x3" },
+      ]);
+      extra = secondary([
+        { name: "Axial stiffness", sym: "EA", value: fmt(r.EA, 5), unit: "N" },
+        { name: "Centroid", sym: "(x2, x3)", value: r.centroid.map((c) => fmt(Math.abs(c) < 1e-9 * Math.sqrt(r.EI_max / r.EA) ? 0 : c * 1000)).join(", "), unit: "mm" },
+      ]);
+    }
+    $("bendOut").innerHTML = html + more("bend-more", "Additional information", extra + logBlock(b.log));
+  }
+
+  const T = numVal("torque"), P = numVal("axial");
+  if (!Number.isFinite(T) || !Number.isFinite(P)) { $("torOut").innerHTML = errHTML("Enter a torque and an axial load (0 for none)."); return; }
+  let tsec = sec, note = "";
+  if (sec.type === "rect") {
+    // the library has no dedicated rectangular torsion function; its arbitrary-section one is exact for a polygon
+    tsec = { type: "arb", surface: "inner", csv: "x2,x3\n" + rectCorners(sec.width, sec.height).map((p) => p.join(",")).join("\n") };
+    note = '<p class="hint">Rectangular sections use the arbitrary-section torsion function with the four inner corners.</p>';
+  }
+  const t = call("torsion", { layup: spec, section: tsec, torque: T, axial: P });
+  if (!t.ok) { $("torOut").innerHTML = errHTML(t.error); return; }
+  const r = t.result, low = r.lowest; state.tor = r;
+  $("torOut").innerHTML =
+    (low && low.R < 1 ? '<div class="note bad">The tube wall fails under these loads (R below 1).</div>' : "") +
+    primary([{ name: "Equivalent torsional rigidity", sym: "GJ", value: fmt(r.GJ_eq, 5), unit: "N·m²" }, lowestKpi(low)]) +
+    secondary([
+      low ? { name: P ? "Torque at first-ply failure (P scaled with it)" : "Torque at first-ply failure", sym: "T<sub>fpf</sub>", value: fmt(T * low.R, 4), unit: "N·m" } : null,
+      { name: "Twist per unit length", sym: "dφ/dx", value: fmt(r.twist_rate, 5), unit: "rad/m" },
+      { name: "Twist per unit length", sym: "dφ/dx", value: fmt((r.twist_rate * 180) / Math.PI, 5), unit: "°/m" },
+      { name: "Shear flow", sym: "q", value: fmt(r.shear_flow, 5), unit: "N/m" },
+    ]) + note +
+    '<p class="hint">R treats the tube wall as the laminate under the wall loads listed in Additional information, and is the lowest of the three criteria in the Failure module. Buckling is not checked.</p>' +
+    more("tor-more", "Additional information", secondary([
+      { name: "Axial strain", sym: "ε<sub>1</sub>", value: fmt(r.axial_strain * 1e6, 5), unit: "µε" },
+      r.enclosed_area !== undefined ? { name: "Mid-wall enclosed area", sym: "A<sub>m</sub>", value: fmt(r.enclosed_area * 1e6, 5), unit: "mm²" } : null,
+      r.perimeter !== undefined ? { name: "Mid-wall perimeter", sym: "S", value: fmt(r.perimeter * 1000, 5), unit: "mm" } : null,
+      { name: "Wall axial load (axial load spread around the wall)", sym: "N<sub>1</sub>", value: fmt(r.wall_N[0]), unit: "N/m" },
+      { name: "Wall shear load (the shear flow)", sym: "N<sub>6</sub>", value: fmt(r.wall_N[2]), unit: "N/m" },
+      low ? { name: "Governing criterion", value: cap(CRIT_NAMES[low.criterion]) } : null,
+      low ? { name: "Critical ply", value: `layer ${low.layer}, ${low.location.toLowerCase()}` } : null,
+    ]) + logBlock(t.log));
+}
+
+// ---------- failure ----------
+const MODE_NAMES = { FT: "fibre tension", FC: "fibre compression", MT: "matrix tension", MC: "matrix compression", S: "shear" };
+function renderFailure(spec) {
+  const N = ["N1", "N2", "N6"].map(numVal), M = ["M1", "M2", "M6"].map(numVal);
+  if ([...N, ...M].some((v) => !Number.isFinite(v))) { $("failOut").innerHTML = errHTML("Enter a number for every load (0 for none)."); return; }
+  const f = call("failure", { layup: spec, N, M });
+  if (!f.ok) { $("failOut").innerHTML = errHTML(f.error); return; }
+  const r = f.result, s = r.summary;
+  const crit = [["max", "Maximum stress"], ["quad", "Tsai-Wu quadratic"], ["hashin", "Hashin"]];
+  const loaded = crit.filter(([k]) => s[k]);
+  if (!loaded.length) { $("failOut").innerHTML = '<p class="hint">No ply is loaded. Enter a non-zero load above.</p>'; return; }
+  const minR = Math.min(...loaded.map(([k]) => s[k].R));
+  const gov = loaded.reduce((a, c) => (s[c[0]].R < s[a[0]].R ? c : a)), g = s[gov[0]], ok = minR >= 1;
+  const modeOf = (x) => MODE_NAMES[x.mode.split("_")[1]];
+  const head = { Max_FT: "FT", Max_FC: "FC", Max_MT: "MT", Max_MC: "MC", Max_S: "S", Quad: "R", Hash_FT: "FT", Hash_FC: "FC", Hash_MT: "MT", Hash_MC: "MC" };
+  const isMin = (ri, c) => crit.some(([k]) => s[k] && s[k].row === ri && s[k].mode === c);
+  const table = '<div class="scroll"><table class="grid"><thead><tr class="grp"><th colspan="2"></th><th colspan="5">Maximum stress</th><th>Tsai-Wu</th><th colspan="4">Hashin</th></tr>' +
+    "<tr><th>Layer</th><th class='l'>Surface</th>" + r.cols.map((c) => `<th>${head[c]}</th>`).join("") + "</tr></thead><tbody>" +
+    r.rows.map((row, ri) => `<tr><td>${row.layer}</td><td class="l">${row.loc}</td>` + r.cols.map((c) => {
+      const v = row[c], cls = [v !== null && v < 1 ? "fail" : "", isMin(ri, c) ? "min" : ""].join(" ").trim();
+      return `<td${cls ? ` class="${cls}"` : ""}>${fmt(v)}</td>`;
+    }).join("") + "</tr>").join("") + "</tbody></table></div>";
+  $("failOut").innerHTML =
+    (ok ? "" : '<div class="note bad">At least one ply fails under these loads (R below 1).</div>') +
+    primary([
+      { name: "Minimum safety factor", sym: "R", value: fmt(minR, 5), tone: ok ? "good" : "bad", note: chip(ok ? "good" : "bad", ok ? "No ply failure" : "Ply failure") },
+      { name: "Governing criterion", text: true, value: gov[1] },
+      { name: "Critical ply", text: true, value: `Layer ${g.layer}`, note: g.location.toLowerCase() + " surface" },
+      { name: "Critical failure mode", text: true, value: modeOf(g) ? cap(modeOf(g)) : "Combined stress", note: modeOf(g) ? "" : "Tsai-Wu does not separate modes" },
+    ]) +
+    "<h3>First-ply failure by criterion</h3>" + secondary(crit.map(([k, n]) => ({ name: n, sym: "R", value: s[k] ? fmt(s[k].R, 5) : "—",
+      note: s[k] ? `layer ${s[k].layer}, ${s[k].location.toLowerCase()}${modeOf(s[k]) ? ", " + modeOf(s[k]) : ""}` : "not loaded" }))) +
+    "<h3>Loads at first-ply failure</h3>" + secondary([
+      { name: "Stress resultants", sym: "N₁, N₂, N₆", value: N.map((v) => fmt(v * minR)).join(", "), unit: "N/m" },
+      { name: "Moment resultants", sym: "M₁, M₂, M₆", value: M.map((v) => fmt(v * minR)).join(", "), unit: "N·m/m" },
+    ]) +
+    more("fail-table", "Detailed results: safety factor of every ply, top and bottom surface", table +
+      '<p class="hint">FT/FC fibre tension/compression, MT/MC matrix tension/compression, S shear. — means that mode is not loaded. Highlighted cells govern each criterion; red is below 1.</p>', true) +
+    more("fail-log", "Additional information: library output", logBlock(f.log));
+}
+
+// ---------- beam ----------
+function fillSource(id, options) {
+  const sel = $(id), prev = sel.value;
+  sel.innerHTML = options.map((o) => `<option value="${o.key}">${esc(o.label)}</option>`).join("") + '<option value="custom">Custom value…</option>';
+  sel.value = [...sel.options].some((o) => o.value === prev) ? prev : sel.options[0].value;
+  sel._values = Object.fromEntries(options.map((o) => [o.key, o.value]));
+}
+function sourceValue(id, customId) { const sel = $(id); return sel.value === "custom" ? numVal(customId) : sel._values[sel.value]; }
+function renderBeam() {
+  const b = state.bend, eiOpts = [];
+  if (b && b.type === "circ") eiOpts.push({ key: "circ", label: `Current tube (${tubeSummary()}): Dx = ${fmt(b.Dx, 5)} N·m²`, value: b.Dx });
+  if (b && b.type === "rect") eiOpts.push({ key: "rect", label: `Current tube (${tubeSummary()}): EI = ${fmt(b.EI, 5)} N·m²`, value: b.EI });
+  if (b && b.type === "arb") for (const [k, n] of [["EI_2", "EI₂ about x2"], ["EI_3", "EI₃ about x3"], ["EI_min", "EI min"], ["EI_max", "EI max"]])
+    eiOpts.push({ key: k, label: `Current tube (${tubeSummary()}): ${n} = ${fmt(b[k], 5)} N·m²`, value: b[k] });
+  fillSource("eiSrc", eiOpts);
+  $("eiCustomWrap").hidden = $("eiSrc").value !== "custom";
+  const edit = ' <button class="small" type="button" data-goto="tube">Edit tube</button>';
+  $("eiNote").innerHTML = $("eiSrc").value === "custom"
+    ? "Custom EI: the beam results below do not use the layup or the tube." + (eiOpts.length ? "" : " No tube stiffness is available right now." + edit)
+    : `EI comes from the tube currently set up in the <b>Tube Stiffness</b> module (${esc(tubeSummary())}) built from the current layup. Changing the tube or the layup changes this beam.` + edit;
+
+  const kind = $("bCase").value, udl = kind.endsWith("udl"), hasA = kind === "ss_point" || kind === "cant_point";
+  $("bPWrap").hidden = udl; $("bWWrap").hidden = !udl; $("bAWrap").hidden = !hasA;
+  $("bALabel").textContent = kind === "cant_point" ? "Load position from fixed end (mm)" : "Load position from left support (mm)";
+  $("bA").placeholder = kind === "cant_point" ? "free end" : "centre";
+
+  const EI = sourceValue("eiSrc", "eiCustom"), L = numVal("bL") / 1000, F = udl ? numVal("bW") : numVal("bP");
+  if (!(EI > 0) || !(L > 0) || !Number.isFinite(F)) {
+    $("beamOut").innerHTML = errHTML(!(EI > 0) ? "No bending stiffness available. Fix the tube section, or choose a custom EI." : "Enter a length greater than zero and a load.");
+  } else {
+    let a = numVal("bA") / 1000;
+    if (!Number.isFinite(a)) a = kind === "cant_point" ? L : L / 2;
+    if (kind === "ff_point") a = L / 2;
+    a = Math.min(Math.max(a, 0), L);
+    const bb = L - a;
+    let y, Mmax, Vmax;
+    if (kind === "ss_point") { y = (x) => (x <= a ? (F * bb * x * (L * L - bb * bb - x * x)) / (6 * EI * L) : (F * a * (L - x) * (L * L - a * a - (L - x) ** 2)) / (6 * EI * L)); Mmax = (F * a * bb) / L; Vmax = (F * Math.max(a, bb)) / L; }
+    if (kind === "ss_udl") { y = (x) => (F * x * (L ** 3 - 2 * L * x * x + x ** 3)) / (24 * EI); Mmax = (F * L * L) / 8; Vmax = (F * L) / 2; }
+    if (kind === "cant_point") { y = (x) => (x <= a ? (F * x * x * (3 * a - x)) / (6 * EI) : (F * a * a * (3 * x - a)) / (6 * EI)); Mmax = F * a; Vmax = F; }
+    if (kind === "cant_udl") { y = (x) => (F * x * x * (6 * L * L - 4 * L * x + x * x)) / (24 * EI); Mmax = (F * L * L) / 2; Vmax = F * L; }
+    if (kind === "ff_point") { y = (x) => { const u = x <= L / 2 ? x : L - x; return (F * u * u * (3 * L - 4 * u)) / (48 * EI); }; Mmax = (F * L) / 8; Vmax = F / 2; }
+    if (kind === "ff_udl") { y = (x) => (F * x * x * (L - x) ** 2) / (24 * EI); Mmax = (F * L * L) / 12; Vmax = (F * L) / 2; }
+    const n = 400, ys = Array.from({ length: n + 1 }, (_, i) => y((i * L) / n));
+    let im = 0; ys.forEach((v, i) => { if (Math.abs(v) > Math.abs(ys[im])) im = i; });
+    const dmax = ys[im], xmax = (im * L) / n;
+    let checked = false, low = null, wall = null, rHint = '<p class="hint">A safety factor needs a tube from the Tube Stiffness module; it is not available for a custom EI.</p>';
+    const eiKey = $("eiSrc").value, c = eiKey === "custom" ? null : extremeFibre(eiKey), spec = layupSpec();
+    if (c !== null && spec) {
+      const kappa = Math.abs(Mmax) / EI;
+      const w = call("wall_bending", { layup: spec, strain: kappa * c, curvature: kappa });
+      if (w.ok) {
+        checked = true; low = w.result.lowest; wall = w.result;
+        rHint = '<p class="hint">R checks the tube wall where the bending moment is largest, at the point furthest from the neutral axis, on both the tension and compression sides, using the lowest of the three criteria in the Failure module. Transverse shear, buckling and crushing under the load points are not checked.</p>';
+      } else rHint = errHTML("Safety factor: " + w.error);
+    }
+    $("beamOut").innerHTML = '<div class="diagram">' + beamSVG(kind, L, a, ys, im) + "</div>" +
+      (low && low.R < 1 ? '<div class="note bad">The tube wall fails under this load (R below 1).</div>' : "") +
+      primary([
+        { name: "Maximum deflection", sym: "δ<sub>max</sub>", value: fmt(Math.abs(dmax) * 1000, 4), unit: "mm", note: `at x = ${fmt(xmax * 1000)} mm` },
+        checked ? lowestKpi(low, low ? `, ${low.side} side` : "") : null,
+      ]) +
+      secondary([
+        { name: "Position of maximum deflection", sym: "x", value: fmt(xmax * 1000), unit: "mm" },
+        { name: "Span / deflection", sym: "L/δ", value: dmax ? fmt(L / Math.abs(dmax), 3) : "—" },
+        { name: "Maximum bending moment", sym: "M<sub>max</sub>", value: fmt(Math.abs(Mmax), 4), unit: "N·m" },
+        { name: "Maximum shear force", sym: "V<sub>max</sub>", value: fmt(Math.abs(Vmax), 4), unit: "N" },
+        low ? { name: "Load at first-ply failure", sym: udl ? "w<sub>fpf</sub>" : "P<sub>fpf</sub>", value: fmt(Math.abs(F) * low.R, 4), unit: udl ? "N/m" : "N" } : null,
+      ]) + rHint +
+      '<p class="hint">Small-deflection beam theory; shear deformation is ignored, which under-predicts deflection for short beams and sandwich sections.</p>' +
+      more("beam-more", "Additional information", secondary([
+        { name: "Bending stiffness used", sym: "EI", value: fmt(EI, 5), unit: "N·m²" },
+        c !== null ? { name: "Mid-wall distance from the neutral axis", sym: "c", value: fmt(c * 1000), unit: "mm" } : null,
+        wall ? { name: "Wall load at that point, tension side", sym: "N<sub>1</sub>", value: fmt(wall.N1), unit: "N/m" } : null,
+        wall ? { name: "Wall moment at that point, tension side", sym: "M<sub>1</sub>", value: fmt(wall.M1), unit: "N·m/m" } : null,
+      ]));
+  }
+}
+function tubeSummary() {
+  const s = state.sec;
+  if (!s) return "none";
+  if (s.type === "circ") return `circular, ${fmt(s.d_in * 1000)} mm inner diameter`;
+  if (s.type === "rect") return `rectangular, ${fmt(s.height * 1000)} × ${fmt(s.width * 1000)} mm inside`;
+  return `arbitrary outline, ${s.surface} surface`;
+}
+// distance from the neutral axis to the mid-wall at the point of the section furthest from that axis [m]
+function extremeFibre(key) {
+  const s = state.sec, b = state.bend, h = state.lam ? state.lam.h_total : 0;
+  if (!s || !b) return null;
+  if (key === "circ") return s.d_in / 2 + h / 2;
+  if (key === "rect") return (s.height + h) / 2;
+  const pts = parsePoints(s.csv);
+  if (!pts) return null;
+  const th = (b.principal_angle_deg * Math.PI) / 180, [xc, yc] = b.centroid;
+  const dist = { EI_2: (x, y) => y, EI_3: (x, y) => x, EI_max: (x, y) => -x * Math.sin(th) + y * Math.cos(th), EI_min: (x, y) => x * Math.cos(th) + y * Math.sin(th) }[key];
+  const far = Math.max(...pts.map((p) => Math.abs(dist(p[0] - xc, p[1] - yc))));
+  return Math.max(far + (s.surface === "inner" ? h / 2 : -h / 2), 0);
+}
+
+// ---------- failure: stress resultant helper ----------
+function plateDiagram(f1, f2, v, full) {
+  // top view of the laminate: 1 (0 deg fibres) runs left to right, 2 runs up the page
+  const load = "var(--bad)", shear = "var(--warn)", dim = "var(--muted)", W = full ? 520 : 340;
+  let g = `<rect x="110" y="50" width="160" height="100" fill="var(--dia-soft)" stroke="var(--dia)" stroke-width="1.5"/>`;
+  for (let y = 62; y <= 138; y += 12.6) g += `<line x1="118" y1="${y}" x2="262" y2="${y}" stroke="var(--dia)" stroke-width="1" opacity="0.4"/>`;
+  g += svgText(190, 96, "0° fibres run along 1", dim, "middle", 10) + svgText(190, 122, "top view", dim, "middle", 10);
+  for (const y of [70, 100, 130]) g += svgArrow(274, y, 308, y, load);
+  for (const x of [150, 190, 230]) g += svgArrow(x, 46, x, 14, load);
+  g += svgText(314, 104, f1, load, "start", 12) + svgText(240, 22, f2, load, "start", 12);
+  g += svgArrow(262, 142, 262, 58, shear) + svgText(256, 86, v, shear, "end", 12);
+  if (!full) { for (const y of [70, 100, 130]) g += svgArrow(106, y, 72, y, load); for (const x of [150, 190, 230]) g += svgArrow(x, 154, x, 186, load); g += svgArrow(118, 58, 118, 142, shear); }
+  else {
+    g += `<path d="M110 163H270M110 158V168M270 158V168M97 50V150M92 50H102M92 150H102" stroke="${dim}" fill="none"/>` + svgText(190, 177, "a", dim) + svgText(86, 104, "b", dim);
+    // side view of the same panel being bent
+    g += `<path d="M366 118Q431 84 496 118" fill="none" stroke="var(--dia)" stroke-width="4" stroke-linecap="round"/>` +
+      svgArc(366, 118, 15, 300, 80, load) + svgArc(496, 118, 15, 240, 460, load) +
+      svgText(431, 62, "bending moment across b", load, "middle", 11) + svgText(431, 150, "side view, looking along 2", dim, "middle", 10) +
+      svgArrow(405, 168, 457, 168, dim) + svgText(462, 172, "1", dim, "start");
+  }
+  g += svgArrow(24, 190, 58, 190, dim) + svgArrow(24, 190, 24, 156, dim) + svgText(63, 194, "1", dim, "start") + svgText(24, 150, "2", dim);
+  return `<svg viewBox="0 0 ${W} 204" role="img" aria-label="Laminate seen from above: direction 1 follows the 0 degree fibres, direction 2 is across them, with the loads acting on the edges" style="max-width:${W}px;margin:4px 0 12px">${g}</svg>`;
+}
+function tubeDiagram() {
+  const load = "var(--bad)", dim = "var(--muted)", ink = "var(--ink)";
+  let g = `<path d="M130 60H360A12 40 0 0 1 360 140H130A12 40 0 0 1 130 60Z" fill="var(--dia-soft)" stroke="var(--dia)" stroke-width="1.5"/>` +
+    `<ellipse cx="360" cy="100" rx="12" ry="40" fill="none" stroke="var(--dia)" stroke-width="1.5"/>` +
+    `<line x1="88" y1="100" x2="374" y2="100" stroke="${dim}" stroke-dasharray="7 4 2 4"/>`;
+  g += svgArrow(378, 100, 432, 100, load, 2) + svgText(440, 104, "P", load, "start", 12);
+  g += `<path d="M330 50A14 50 0 0 1 335 149" fill="none" stroke="${load}" stroke-width="1.6"/>` + svgHead(326, 150, Math.PI * 1.05, load) + svgText(352, 46, "T", load, "start", 12);
+  g += svgArc(112, 100, 30, 250, 110, load) + svgText(70, 104, "M", load, "end", 12);
+  g += svgArrow(215, 94, 215, 66, load) + svgArrow(215, 106, 215, 134, load) + svgText(224, 90, "p", load, "start", 12);
+  g += `<path d="M165 60V140M160 60H170M160 140H170" stroke="${dim}" fill="none"/>` + svgText(172, 126, "d", dim, "start");
+  g += `<rect x="262" y="70" width="24" height="24" fill="none" stroke="${ink}"/>` + svgArrow(274, 82, 312, 82, ink) + svgArrow(274, 82, 274, 40, ink) +
+    svgText(316, 86, "1", ink, "start") + svgText(274, 34, "2 (around the hoop)", ink, "middle") + svgText(274, 112, "wall element", dim, "middle", 10);
+  return `<svg viewBox="0 0 470 170" role="img" aria-label="Tube seen from the side: direction 1 runs along the tube axis and direction 2 around the hoop, with axial force, torque, bending moment and internal pressure" style="max-width:470px;margin:4px 0 12px">${g}</svg>`;
+}
+function helperDiagram(type) {
+  if (type === "tube") return tubeDiagram();
+  return type === "panel" ? plateDiagram("F₁", "F₂", "V", true) : plateDiagram("σ₁", "σ₂", "τ₆", false);
+}
+function renderHelper() {
+  const type = $("hType").value;
+  for (const k of ["panel", "tube", "stress"]) $("h_" + k).hidden = k !== type;
+  $("hDiagram").innerHTML = helperDiagram(type);
+  const v = (id, fallback = 0) => { const x = parseFloat($(id).value); return Number.isFinite(x) ? x : fallback; };
+  const midD = state.sec && state.sec.type === "circ" && state.lam ? (state.sec.d_in + state.lam.h_total) * 1000 : NaN;
+  const lamT = state.lam ? state.lam.h_total * 1000 : NaN;
+  $("hD").placeholder = Number.isFinite(midD) ? `${fmt(midD)} (Tube tab)` : "";
+  $("hTh").placeholder = Number.isFinite(lamT) ? `${fmt(lamT)} (laminate)` : "";
+  let N = [0, 0, 0], M = [0, 0, 0], how = "", err = "";
+  if (type === "panel") {
+    const b = v("hB", NaN) / 1000, a = v("hA", NaN) / 1000;
+    if (!(b > 0) || !(a > 0)) err = "Enter a width and a length greater than zero.";
+    else { N = [v("hF1") / b, v("hF2") / a, v("hV") / b]; M = [v("hMb1") / b, v("hMb2") / a, 0]; how = "N₁ = F₁ / b,  N₂ = F₂ / a,  N₆ = V / b,  M₁ = moment / b,  M₂ = moment / a"; }
+  } else if (type === "tube") {
+    const d = v("hD", midD) / 1000, p = v("hPr") * 1e6;
+    if (!(d > 0)) err = "Enter the mid-wall diameter of the tube.";
+    else { N = [v("hP") / (Math.PI * d) + (4 * v("hMb")) / (Math.PI * d * d) + (p * d) / 4, (p * d) / 2, (2 * v("hT")) / (Math.PI * d * d)]; how = "N₁ = P / (π d) + 4 M / (π d²) + p d / 4,  N₂ = p d / 2,  N₆ = 2 T / (π d²)"; }
+  } else {
+    const t = v("hTh", lamT) / 1000;
+    if (!(t > 0)) err = "Enter the laminate thickness.";
+    else { N = [v("hS1"), v("hS2"), v("hS6")].map((x) => x * 1e6 * t); how = "N = σ × t"; }
+  }
+  state.helper = err ? null : { N, M };
+  $("hApply").disabled = !!err;
+  $("hOut").innerHTML = err ? errHTML(err) : secondary([{ name: "Stress resultants", sym: "N₁, N₂, N₆", value: N.map((x) => fmt(x)).join(", "), unit: "N/m" }, { name: "Moment resultants", sym: "M₁, M₂, M₆", value: M.map((x) => fmt(x)).join(", "), unit: "N·m/m" }]) + `<p class="hint">${how}</p>`;
+}
+
+function beamSVG(kind, L, a, ys, im) {
+  // a negative load lifts the beam, so the load is drawn pushing up from below and the deflected shape above
+  const up = ys[im] < 0, dir = up ? -1 : 1, H = up ? 158 : 124, yb = up ? 102 : 52, amp = 44;
+  const x0 = 46, x1 = 514, X = (x) => x0 + ((x1 - x0) * x) / L, peak = Math.abs(ys[im]) || 1;
+  const curve = ys.map((v, i) => `${(x0 + ((x1 - x0) * i) / (ys.length - 1)).toFixed(1)},${(yb + (v / peak) * amp).toFixed(1)}`).join(" ");
+  const pin = (x) => `<polygon points="${x},${yb + 3} ${x - 9},${yb + 18} ${x + 9},${yb + 18}" fill="none" stroke="var(--ink)" stroke-width="1.5"/>`;
+  const wall = (x, side) => `<line x1="${x}" y1="${yb - 24}" x2="${x}" y2="${yb + 24}" stroke="var(--ink)" stroke-width="3"/>` +
+    [-18, -6, 6, 18].map((d) => `<line x1="${x}" y1="${yb + d}" x2="${x + side * 8}" y2="${yb + d + 8}" stroke="var(--ink)" stroke-width="1"/>`).join("");
+  const arrow = (x, tail) => svgArrow(x, tail, x, yb - dir * 5, "var(--bad)");
+  let sup = "", load = "";
+  if (kind.startsWith("ss")) sup = pin(x0) + pin(x1);
+  if (kind.startsWith("cant")) sup = wall(x0, -1);
+  if (kind.startsWith("ff")) sup = wall(x0, -1) + wall(x1, 1);
+  if (kind.endsWith("udl")) {
+    const base = yb - dir * 30, inset = up && kind.startsWith("ss") ? 16 : 0;  // keep clear of the supports when drawn below
+    load = `<line x1="${x0 + inset}" y1="${base}" x2="${x1 - inset}" y2="${base}" stroke="var(--bad)" stroke-width="1.6"/>`;
+    for (let i = 0; i <= 12; i++) load += arrow(x0 + inset + ((x1 - x0 - 2 * inset) * i) / 12, base);
+  } else load = arrow(X(a), yb - dir * 40);
+  const xm = x0 + ((x1 - x0) * im) / (ys.length - 1), ym = yb + dir * amp;
+  return `<svg viewBox="0 0 560 ${H}" role="img" aria-label="Beam diagram with deflected shape" style="margin-bottom:12px">` +
+    `<line x1="${x0}" y1="${yb}" x2="${x1}" y2="${yb}" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>` +
+    `<polyline points="${curve}" fill="none" stroke="var(--dia)" stroke-width="2" stroke-dasharray="5 4"/>` + sup + load +
+    `<circle cx="${xm.toFixed(1)}" cy="${ym}" r="3" fill="var(--dia)"/>` +
+    `<text x="${Math.min(Math.max(xm, 130), 430).toFixed(1)}" y="${ym + (up ? -9 : 16)}" text-anchor="middle" font-size="11" fill="var(--muted)">δ max = ${fmt(Math.abs(ys[im]) * 1000)} mm ${up ? "upward " : ""}(shape exaggerated)</text></svg>`;
+}
+
+// ---------- recalculation ----------
+function recalc() {
+  if (!pyApi) return;
+  const spec = layupSpec();
+  const dependents = ["lamOut", "bendOut", "torOut", "failOut"];
+  $("layupError").innerHTML = "";
+  $("layupWarn").innerHTML = "";
+  if (!spec) {
+    $("layupError").innerHTML = errHTML("Enter at least one ply in the sequence.");
+    $("preview").innerHTML = ""; $("layerTable").innerHTML = "";
+    dependents.forEach((id) => ($(id).innerHTML = '<p class="hint">Waiting for a valid layup.</p>'));
+    state.lam = state.bend = state.tor = null; renderBeam(); return;
+  }
+  const lay = call("layers", { layup: spec });
+  if (!lay.ok) {
+    $("layupError").innerHTML = errHTML("Could not read the sequence: " + lay.error);
+    dependents.forEach((id) => ($(id).innerHTML = '<p class="hint">Waiting for a valid layup.</p>'));
+    state.lam = state.bend = state.tor = null; renderBeam(); return;
+  }
+  renderPreview(lay.result); renderLayerTable(lay.result);
+  $("layupWarn").innerHTML = layupWarnings(lay.result).map((w) => `<div class="note warn">${w}</div>`).join("");
+  const lam = call("laminate", { layup: spec });
+  if (!lam.ok) {
+    $("layupError").innerHTML = errHTML(lam.error);
+    dependents.forEach((id) => ($(id).innerHTML = '<p class="hint">Waiting for a valid layup.</p>'));
+    state.lam = state.bend = state.tor = null; renderBeam(); return;
+  }
+  state.lam = lam.result;
+  renderLaminate(lam.result, lam.log);
+  renderTube(spec);
+  renderFailure(spec);
+  renderHelper();
+  renderBeam();
+}
+let timer = null;
+function schedule() { clearTimeout(timer); timer = setTimeout(recalc, 250); }
+
+// ---------- events ----------
+const MODULES = {
+  laminate: ["Laminate", "Thickness, mass and the A, B, D stiffness matrices of the layup, from classical laminate theory."],
+  tube: ["Tube Stiffness", "Bending and torsion of a tube whose wall is the current layup."],
+  failure: ["Failure", "Ply-by-ply safety factors of the layup under applied stress and moment resultants."],
+  beam: ["Beam", "Deflection and strength of a beam made from the current tube."],
+  materials: ["Materials", "Ply material properties available to the layup builder."],
+  upcoming: ["Upcoming", "Features planned for later versions."],
+};
+function showTab(name) {
+  document.querySelectorAll(".nav button[data-tab]").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === name ? "page" : "false"));
+  document.querySelectorAll(".module").forEach((p) => (p.hidden = p.id !== "tab-" + name));
+  $("modTitle").textContent = MODULES[name][0];
+  $("modDesc").textContent = MODULES[name][1];
+  $("workspace").classList.toggle("no-layup", name === "materials" || name === "upcoming");  // these two do not use the layup
+  document.body.classList.remove("sb-open");
+}
+document.querySelectorAll(".nav button[data-tab]").forEach((btn) => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
+
+// sidebar: collapses to icons when asked or when the window is narrow; a drawer on small screens
+const SIDEBAR_KEY = "composites_calculator_sidebar_collapsed";
+const narrowScreen = window.matchMedia("(max-width: 1180px)");
+function savedCollapse() { try { return localStorage.getItem(SIDEBAR_KEY) === "1"; } catch (e) { return false; } }
+function setCollapsed(on) {
+  document.body.classList.toggle("sb-collapsed", on);
+  $("sbToggle").setAttribute("aria-expanded", String(!on));
+  $("sbToggle").title = on ? "Expand sidebar" : "Collapse sidebar";
+}
+setCollapsed(narrowScreen.matches || savedCollapse());
+narrowScreen.addEventListener("change", () => setCollapsed(narrowScreen.matches || savedCollapse()));
+$("sbToggle").addEventListener("click", () => {
+  const on = !document.body.classList.contains("sb-collapsed");
+  setCollapsed(on);
+  if (!narrowScreen.matches) { try { localStorage.setItem(SIDEBAR_KEY, on ? "1" : "0"); } catch (e) { /* preference lasts for this visit only */ } }
+});
+$("menuBtn").addEventListener("click", () => document.body.classList.toggle("sb-open"));
+$("backdrop").addEventListener("click", () => document.body.classList.remove("sb-open"));
+// remember which expandable sections are open
+document.addEventListener("toggle", (e) => { if (e.target.dataset && e.target.dataset.key) openState[e.target.dataset.key] = e.target.open; }, true);
+document.querySelectorAll(".live").forEach((el) => el.addEventListener("input", schedule));
+$("seq").addEventListener("input", () => { state.overrides = {}; schedule(); });
+$("seq").addEventListener("change", () => { normaliseSeq(); schedule(); });
+$("baseMat").addEventListener("change", schedule);
+document.querySelectorAll("[data-tok]").forEach((b) => b.addEventListener("click", () => {
+  $("seq").value = [...tokens(), b.dataset.tok].join("/"); state.overrides = {}; recalc();
+}));
+$("seqBack").addEventListener("click", () => { $("seq").value = tokens().slice(0, -1).join("/"); state.overrides = {}; recalc(); });
+document.querySelectorAll("#mode button").forEach((b) => b.addEventListener("click", () => { setMode(b.dataset.mode); state.overrides = {}; recalc(); }));
+$("resetEdits").addEventListener("click", () => { state.overrides = {}; recalc(); });
+$("layerTable").addEventListener("change", (e) => {
+  const tr = e.target.closest("tr[data-n]"); if (!tr) return;
+  // a row is one ply: a single layer, or all the sub-layers of a woven ply
+  const members = tr.dataset.n.split(",").map((n) => (state.layers || []).find((l) => String(l.num) === n)).filter(Boolean);
+  const f = e.target.dataset.f, ovOf = (m) => (state.overrides[m.num] = state.overrides[m.num] || {});
+  if (f === "material") {
+    // keep each layer's thickness in proportion to the new material's ply thickness (a woven sub-layer stays a quarter)
+    const newM = matByName(e.target.value);
+    for (const m of members) {
+      const oldM = matByName(m.material), ov = ovOf(m);
+      if (oldM && newM && oldM.h0 > 0) ov.thickness = (m.thickness / oldM.h0) * newM.h0;
+      ov.material = e.target.value;
+    }
+  } else {
+    const v = parseFloat(e.target.value);
+    if (!Number.isFinite(v) || (f === "thickness" && v <= 0)) { recalc(); return; }
+    // thickness is shared equally between the sub-layers; the weave angle gives fibres at θ and θ−90
+    for (const m of members) ovOf(m)[f] = f === "thickness" ? v / 1000 / members.length : m.role === 1 ? v - 90 : v;
+  }
+  recalc();
+});
+document.querySelectorAll("[data-ex]").forEach((b) => b.addEventListener("click", () => {
+  $("pts").value = examplePoints(b.dataset.ex); if (b.dataset.ex === "naca") $("surface").value = "outer"; recalc();
+}));
+$("ptsUploadBtn").addEventListener("click", () => $("ptsFile").click());
+$("ptsFile").addEventListener("change", async (e) => { const f = e.target.files[0]; if (f) { $("pts").value = await f.text(); recalc(); } e.target.value = ""; });
+document.addEventListener("click", (e) => {
+  const c = e.target.closest("[data-copy]");
+  if (c && navigator.clipboard) navigator.clipboard.writeText(copyStore[+c.dataset.copy]).then(() => { c.textContent = "Copied"; setTimeout(() => (c.textContent = "Copy CSV"), 1200); });
+  const info = e.target.closest("[data-info]");
+  if (info) { const text = info.closest(".mhead").nextElementSibling; text.hidden = !text.hidden; openState[info.dataset.info] = !text.hidden; }
+  const go = e.target.closest("[data-goto]");
+  if (go) showTab(go.dataset.goto);
+  const d = e.target.closest("[data-del]");
+  if (d) refreshMaterials(loadCustom().filter((m) => m.name !== d.dataset.del));
+});
+$("matForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!pyApi) return;
+  const name = $("m_name").value.trim(), msg = $("matFormMsg");
+  if (!name || name.toLowerCase() === "core" || matByName(name)) { msg.textContent = name ? "That name is already in use." : "Enter a name."; return; }
+  const m = { name, source: $("m_source").value.trim() || "Custom", h0: numVal("m_h0") / 1000, rho: numVal("m_rho") };
+  for (const k of ["Ex", "Ey", "Es", "vxy", "Xt", "Xc", "Yt", "Yc", "Sc"]) m[k] = numVal("m_" + k);
+  if (Object.values(m).some((v) => typeof v === "number" && !Number.isFinite(v))) { msg.textContent = "Fill in every property."; return; }
+  refreshMaterials([...loadCustom(), m]);
+  msg.textContent = `Added “${name}”. Select it in the layup builder.`;
+  e.target.reset();
+});
+
+document.querySelectorAll(".hlive").forEach((el) => el.addEventListener("input", renderHelper));
+$("hApply").addEventListener("click", () => {
+  if (!state.helper) return;
+  ["N1", "N2", "N6"].forEach((id, i) => ($(id).value = trim6(state.helper.N[i])));
+  ["M1", "M2", "M6"].forEach((id, i) => ($(id).value = trim6(state.helper.M[i])));
+  recalc();
+});
+
+setMode("so");
+renderHelper();
+boot();
+</script>
+</body>
+</html>
