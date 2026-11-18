@@ -84,8 +84,10 @@ footer { padding: 0 20px 22px; color: var(--muted); font-size: 12px; }
 .diagram { border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); padding: 10px; }
 .diagram svg { margin: 0 auto; }
 #secPreview svg { max-width: 460px; }
-#beamOut .diagram { margin-bottom: 12px; padding: 6px 10px 0; }
-#beamOut .diagram svg { max-width: 420px; }
+#beamDiagram { padding: 6px 10px 0; } #beamDiagram:empty { display: none; }
+#beamDiagram svg { max-width: 460px; }
+#boltDiagram svg { max-width: 460px; }
+#clampDiagram svg { max-width: 400px; }
 
 /* ---- inputs (blue = editable) ---- */
 label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
@@ -206,6 +208,8 @@ ul.road { margin: 0; padding-left: 18px; } ul.road li { margin-bottom: 10px; } u
     <button data-tab="tube" title="Tube Stiffness" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg><span class="lbl">Tube Stiffness</span></button>
     <button data-tab="failure" title="Failure" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 2.5 20h19L12 3.5Z"/><path d="M12 10v4.5"/><path d="M12 17.2v.3"/></svg><span class="lbl">Failure</span></button>
     <button data-tab="beam" title="Beam" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10h20"/><path d="m5 10-3 6h6l-3-6Z"/><path d="m19 10-3 6h6l-3-6Z"/><path d="M12 2v6"/><path d="m9.5 5.5 2.5 2.5 2.5-2.5"/></svg><span class="lbl">Beam</span></button>
+    <button data-tab="bolt" title="Bolted Joint" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="1.5"/><circle cx="13" cy="12" r="3"/><path d="M16 12h4"/><path d="m18.5 10.5 1.5 1.5-1.5 1.5"/></svg><span class="lbl">Bolted Joint</span></button>
+    <button data-tab="clamp" title="Tube Clamp" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M3 11h4a5 5 0 0 1 10 0h4"/><path d="M3 13h4a5 5 0 0 0 10 0h4"/></svg><span class="lbl">Tube Clamp</span></button>
     <button data-tab="materials" title="Materials" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span class="lbl">Materials</span></button>
     <button data-tab="upcoming" title="Upcoming" aria-current="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="lbl">Upcoming</span></button>
   </nav>
@@ -226,6 +230,10 @@ ul.road { margin: 0; padding-left: 18px; } ul.road li { margin-bottom: 10px; } u
     <div id="layupCol">
       <section class="card">
         <h2>Layup configuration<small>used by every calculation</small></h2>
+        <div class="row">
+          <div><label for="preset">Preset (off-the-shelf part; fills in the layup and the tube geometry)</label><select id="preset" disabled><option value="">None (custom layup)</option></select></div>
+        </div>
+        <div class="note info" id="presetNote" hidden></div>
         <div class="row">
           <div><label for="baseMat">Material (all plies; change single plies under Individual plies)</label><select id="baseMat"></select></div>
         </div>
@@ -276,7 +284,7 @@ ul.road { margin: 0; padding-left: 18px; } ul.road li { margin-bottom: 10px; } u
       </div>
 
       <div class="module" id="tab-tube" hidden>
-        <section class="card">
+        <section class="card" id="tubeGeom">
           <h2>Tube geometry</h2>
           <div class="two">
             <div>
@@ -405,17 +413,17 @@ ul.road { margin: 0; padding-left: 18px; } ul.road li { margin-bottom: 10px; } u
       </div>
 
       <div class="module" id="tab-beam" hidden>
-        <div class="split">
-          <section class="card">
-            <h2>Cross-section and stiffness</h2>
+        <section class="card">
+          <h2>Beam setup</h2>
+          <div class="two">
+            <div>
+            <h3>Cross-section and stiffness</h3>
             <div class="row">
               <div style="grid-column: span 2"><label for="eiSrc">Bending stiffness EI</label><select id="eiSrc" class="live"></select></div>
               <div id="eiCustomWrap" hidden><label for="eiCustom">EI (N·m²)</label><input type="number" id="eiCustom" class="live" value="1000" min="0" step="any"></div>
             </div>
-            <div class="note info" id="eiNote" style="margin-bottom:0"></div>
-          </section>
-          <section class="card">
-            <h2>Loading and supports</h2>
+            <div class="note info" id="eiNote"></div>
+            <h3>Loading and supports</h3>
             <div class="row">
               <div style="grid-column: span 2"><label for="bCase">Supports and load</label>
                 <select id="bCase" class="live">
@@ -433,9 +441,139 @@ ul.road { margin: 0; padding-left: 18px; } ul.road li { margin-bottom: 10px; } u
               <div id="bWWrap" hidden><label for="bW">Load w (N/m)</label><input type="number" id="bW" class="live" value="50" step="any"></div>
               <div id="bAWrap"><label for="bA" id="bALabel">Load position a (mm)</label><input type="number" id="bA" class="live" placeholder="centre" min="0" step="any"></div>
             </div>
-          </section>
-        </div>
+            </div>
+            <div class="diagram" id="beamDiagram"></div>
+          </div>
+        </section>
         <section class="card"><h2>Beam results<small>Euler–Bernoulli bending</small></h2><div id="beamOut"></div></section>
+      </div>
+
+      <div class="module" id="tab-bolt" hidden>
+        <section class="card">
+          <h2>Bolt hole setup<small>one fastener through the laminate, loaded sideways</small></h2>
+          <div class="two">
+            <div>
+              <h3>Geometry and load</h3>
+              <div class="row">
+                <div><label for="bD">Bolt or dowel diameter d (mm)</label><input type="number" id="bD" class="live" value="5" min="0" step="any"></div>
+                <div><label for="bE">Edge distance e, hole centre to edge (mm)</label><input type="number" id="bE" class="live" value="15" min="0" step="any"></div>
+                <div><label for="bWd">Width w, strip width or bolt spacing (mm)</label><input type="number" id="bWd" class="live" value="25" min="0" step="any"></div>
+              </div>
+              <div class="row">
+                <div><label for="bLoad">Sideways load on the bolt P (N)</label><input type="number" id="bLoad" class="live" value="1000" min="0" step="any"></div>
+                <div><label for="bAng">Load direction from the 0° fibres (°)</label><input type="number" id="bAng" class="live" value="0" step="any"></div>
+              </div>
+              <h3>Fastener and hole</h3>
+              <div class="row">
+                <div style="grid-column: span 2"><label for="bFit">Hole quality and fit</label>
+                  <select id="bFit" class="live">
+                    <option value="1.00">Reamed or precision fit, clearance ≤ 1 % of d</option>
+                    <option value="0.95">Close fit, clearance ≈ 2–3 % of d (5.1 mm hole, 5 mm pin)</option>
+                    <option value="0.85" selected>Fine clearance hole, ≈ 6 % of d (5.3 mm hole, M5)</option>
+                    <option value="0.75">Medium clearance, ≈ 10 % of d (5.5 mm hole, M5), or worn</option>
+                    <option value="0.65">Rough or damaged hole: breakout, delamination, frayed fibres</option>
+                    <option value="custom">Custom factor…</option>
+                  </select></div>
+                <div id="bFitCWrap" hidden><label for="bFitC">Fit factor</label><input type="number" id="bFitC" class="live" value="0.9" min="0" step="any"></div>
+              </div>
+              <div class="row">
+                <div style="grid-column: span 2"><label for="bCon">Contact with the hole wall</label>
+                  <select id="bCon" class="live">
+                    <option value="1.00">Smooth dowel or bolt shank (smooth metal on composite)</option>
+                    <option value="0.75">Bolt threads bearing on the composite</option>
+                    <option value="custom">Custom factor…</option>
+                  </select></div>
+                <div id="bConCWrap" hidden><label for="bConC">Contact factor</label><input type="number" id="bConC" class="live" value="0.8" min="0" step="any"></div>
+              </div>
+              <div class="row">
+                <div style="grid-column: span 2"><label for="bClamp">Clamping across the laminate</label>
+                  <select id="bClamp" class="live">
+                    <option value="1.00">None: pin, dowel or loose nut</option>
+                    <option value="1.15">Finger-tight nut with washers</option>
+                    <option value="1.35">Torqued bolt with washers</option>
+                  </select></div>
+              </div>
+              <details class="more" data-key="bolt-adv">
+                <summary>Advanced: bearing strength and notch sensitivity</summary>
+                <div class="more-b">
+                  <div class="row">
+                    <div><label for="bBrRef">Reference bearing strength (MPa, blank = estimate)</label><input type="number" id="bBrRef" class="live" placeholder="estimate" min="0" step="any"></div>
+                    <div><label for="bBrK">Estimate: bearing / laminate compression strength</label><input type="number" id="bBrK" class="live" value="1.2" min="0" step="any"></div>
+                    <div><label for="bC">Notch sensitivity C (Hart-Smith)</label><input type="number" id="bC" class="live" value="0.25" min="0" max="1" step="any"></div>
+                  </div>
+                  <p class="hint">The reference bearing strength is for a smooth pin in a tight hole, not clamped. Enter a test value if you have one; the factors above are applied to it. C is about 0.25 for quasi-isotropic carbon, nearer 0.35–0.4 for layups with mostly 0° plies and lower for ±45-rich layups. C = 1 is fully elastic, notch-sensitive behaviour.</p>
+                </div>
+              </details>
+            </div>
+            <div class="diagram" id="boltDiagram"></div>
+          </div>
+        </section>
+        <section class="card"><h2>Bolt hole results<small>bearing, net-tension and shear-out</small></h2><div id="boltOut"></div></section>
+      </div>
+
+      <div class="module" id="tab-clamp" hidden>
+        <section class="card">
+          <h2>Clamp setup<small>two identical halves screwed together around the tube</small></h2>
+          <div class="two">
+            <div>
+              <h3>Tube</h3>
+              <div class="row">
+                <div><label for="cShape">Tube shape</label>
+                  <select id="cShape" class="live">
+                    <option value="round">Round (C-shaped clamp halves)</option>
+                    <option value="rect">Rectangular (U-shaped clamp halves)</option>
+                  </select></div>
+                <div style="align-self:end"><button type="button" id="cCopy" title="Take the shape and size from the Tube Stiffness module">Use Tube Stiffness geometry</button></div>
+              </div>
+              <div id="cRound" class="row">
+                <div><label for="cD">Inner diameter (mm)</label><input type="number" id="cD" class="live" value="28" min="0" step="any"></div>
+              </div>
+              <div id="cRect" class="row" hidden>
+                <div><label for="cW">Inner width of the clamped faces (mm)</label><input type="number" id="cW" class="live" value="50.292" min="0" step="any"></div>
+                <div><label for="cH">Inner height between the clamped faces (mm)</label><input type="number" id="cH" class="live" value="25.146" min="0" step="any"></div>
+                <div><label for="cR">Inner corner radius (mm)</label><input type="number" id="cR" class="live" value="3.5687" min="0" step="any"></div>
+              </div>
+              <p class="hint" id="cCopyMsg">The wall is the current layup, built outward from the inner surface. 0° runs along the tube, as in the Tube Stiffness module.</p>
+              <h3>Clamp</h3>
+              <div class="row">
+                <div><label for="cL">Contact length along the tube (mm)</label><input type="number" id="cL" class="live" value="30" min="0" step="any"></div>
+                <div><label for="cF">Total screw preload F (N)</label><input type="number" id="cF" class="live" value="2000" min="0" step="any"></div>
+                <div><label for="cMu">Friction coefficient μ, clamp on tube</label><input type="number" id="cMu" class="live" value="0.3" min="0" step="any"></div>
+              </div>
+              <details class="more" data-key="clamp-torque">
+                <summary>Work out the preload from screw torque</summary>
+                <div class="more-b">
+                  <div class="row">
+                    <div><label for="cnS">Number of screws</label><input type="number" id="cnS" class="tlive" value="4" min="1" step="1"></div>
+                    <div><label for="cdS">Screw size d (mm)</label><input type="number" id="cdS" class="tlive" value="4" min="0" step="any"></div>
+                    <div><label for="cTq">Tightening torque (N·m)</label><input type="number" id="cTq" class="tlive" value="2" min="0" step="any"></div>
+                    <div><label for="cK">Nut factor K</label><input type="number" id="cK" class="tlive" value="0.2" min="0" step="any"></div>
+                  </div>
+                  <p class="hint" id="cTqOut"></p>
+                  <button class="primary" type="button" id="cTqApply">Use this preload</button>
+                </div>
+              </details>
+              <div class="row" style="margin-top:10px">
+                <div style="grid-column: span 2"><label for="cContact">Contact between clamp and tube</label>
+                  <select id="cContact" class="live">
+                    <option value="even">Even: clamp bored or machined to fit, or with a soft liner</option>
+                    <option value="line">Concentrated: rigid clamp that touches first at one line (slight mismatch)</option>
+                  </select></div>
+              </div>
+              <div class="row">
+                <div style="grid-column: span 2"><label for="cPlug">Inside the tube under the clamp</label>
+                  <select id="cPlug" class="live">
+                    <option value="0">Nothing: hollow tube</option>
+                    <option value="1">A plug bonded in, filling the bore</option>
+                  </select></div>
+                <div id="cPlugWrap" hidden><label for="cPlugS">Plug compressive strength (MPa)</label><input type="number" id="cPlugS" class="live" value="20" min="0" step="any"></div>
+              </div>
+              <p class="hint">Friction: about 0.15–0.2 for dry anodised aluminium on smooth carbon, 0.3–0.4 on peel-ply or textured carbon, up to 0.5 with carbon friction paste or a rubber liner. Plug strength: about 2–5 MPa for PVC foam, 10–15 MPa for end-grain balsa, 15–35 MPa for printed CF-nylon with walls running between the clamped faces, 30 MPa for birch plywood on edge.</p>
+            </div>
+            <div class="diagram" id="clampDiagram"></div>
+          </div>
+        </section>
+        <section class="card"><h2>Clamp results<small>tube wall strength, buckling and grip</small></h2><div id="clampOut"></div></section>
       </div>
 
       <div class="module" id="tab-materials" hidden>
@@ -621,6 +759,14 @@ def _section_csv(s):
     return "/tmp/section.csv"
 
 
+def _outline(p):
+    """The surface given by the points and the other surface of the wall, d [m] away, for the section drawing."""
+    s = p["section"]
+    px, py = cc._section_read_csv(_section_csv(s), s["surface"])
+    ox, oy = cc._section_offset(px, py, p["d"] if s["surface"] == "inner" else -p["d"], np.radians(3.0))
+    return {"datum": np.column_stack([px, py]), "other": np.column_stack([ox, oy])}
+
+
 def _bending(p):
     lu = _build(p["layup"])
     A, B, D = cc.calculate_A_B_D_matrix(lu)
@@ -703,8 +849,245 @@ def _wall_bending(p):
     return {"lowest": best, "N1": N1, "M1": M1}
 
 
-_API = {"materials": _materials, "layers": _layers, "laminate": _laminate, "bending": _bending,
-        "torsion": _torsion, "failure": _failure, "wall_bending": _wall_bending}
+def _load_axes_N(phi, kind, sign):
+    """Unit stress resultant [N1, N2, N6] for a load in axes turned phi [rad] from the laminate 1 direction:
+    uniaxial ("n") along the load, or in-plane shear ("s") in the load axes."""
+    c, s = math.cos(phi), math.sin(phi)
+    v = [c * c, s * s, s * c] if kind == "n" else [-2 * s * c, 2 * s * c, c * c - s * s]
+    return [sign * x for x in v]
+
+
+def _matrix_discounted(spec):
+    """The layup with the matrix-dominated stiffnesses (Ey, Es) of every ply cut to 1 %: the laminate after matrix
+    cracking, with the fibres carrying the load (ply-discount estimate of the last-ply, fibre failure)."""
+    lu = _build(spec)
+    for i, r in lu.iterrows():
+        if r["Material_name"] == "Core":
+            continue
+        m = r["Material"]
+        lu.at[i, "Material"] = cc.Material(m.name, [m.Ex, m.Ey * 0.01, m.Es * 0.01, m.vxy],
+                                           [m.Xt, m.Xc, m.Yt, m.Yc, m.Sc], m.h0, m.rho, m.source)
+    return lu
+
+
+def _bolt(p):
+    """
+    Laminate strengths [Pa] in the axes of a bolt load at p["angle"] [deg] from the 1 direction: tension and compression
+    along the load and in-plane shear. Each is the higher of first-ply failure (lowest R of the three criteria) and
+    fibre failure after matrix cracking, since a notched laminate keeps carrying load after its matrix cracks.
+    The bolt-hole formulas themselves run in the page.
+    """
+    spec = p["layup"]
+    lu = _build(spec)
+    plies = lu[lu["Material_name"] != "Core"]
+    t = float(plies["Thickness (m)"].sum())
+    lu_d = _matrix_discounted(spec)
+    a_intact = np.linalg.inv(cc.calculate_A_B_D_matrix(lu)[0])
+    a_cracked = np.linalg.inv(cc.calculate_A_B_D_matrix(lu_d)[0])
+    phi = math.radians(p["angle"])
+
+    def strength(kind, sign):
+        N = _load_axes_N(phi, kind, sign)
+        by_crit = _safety(spec, N, [0.0, 0.0, 0.0])["summary"]
+        low = None
+        for key, s in by_crit.items():
+            if s and (low is None or s["R"] < low["R"]):
+                low = dict(s, criterion=key)
+        fpf = low["R"] if low else None
+        fib, fib_at = None, None
+        # the fibre path counts only where fibres actually carry this load: after matrix cracking the laminate must
+        # keep at least 10 % of its stiffness in this direction (not so for a UD ply loaded across its fibres)
+        Nv = np.array(N)
+        if Nv @ a_intact @ Nv >= 0.1 * (Nv @ a_cracked @ Nv):
+            sf = cc.calculate_safety_factors(lu_d, Nv, np.zeros(3))
+            fib = sf[["Max_FT", "Max_FC"]].min().min()
+            if pd.isna(fib):
+                fib = None
+            else:
+                fib = float(fib)
+                mode = sf[["Max_FT", "Max_FC"]].min().idxmin()
+                idx = sf[mode].idxmin()
+                fib_at = {"mode": mode, "layer": int(sf.at[idx, "Layer #"]), "location": sf.at[idx, "T/B"]}
+        R = max(x for x in (fpf, fib, 0.0) if x is not None)
+        return {"stress": R / t, "fpf": None if fpf is None else fpf / t, "fibre": None if fib is None else fib / t,
+                "basis": "fibre" if fib is not None and (fpf is None or fib > fpf) else "fpf", "first": low,
+                "fibre_at": fib_at,
+                "criteria": {k: None if s is None else dict(s, stress=s["R"] / t) for k, s in by_crit.items()}}
+
+    shear = min((strength("s", 1.0), strength("s", -1.0)), key=lambda x: x["stress"])
+    return {"t": t, "has_core": bool(len(plies) < len(lu)),
+            "tension": strength("n", 1.0), "compression": strength("n", -1.0), "shear": shear}
+
+
+_CRIT_MODES = {"max": ["FT", "FC", "MT", "MC", "S"], "hashin": ["FT", "FC", "MT", "MC"]}
+
+
+def _hoop_checker(lu):
+    """
+    A fast first-ply failure check of the wall under a hoop force N2 [N/m] and hoop moment M2 [N] (laminate 2
+    direction = around the tube). Same maths as calculate_safety_factors(), without its printing, so it can run at
+    every point of the ring. Returns a function giving the lowest R and where and how the wall fails.
+    """
+    A, B, D = cc.calculate_A_B_D_matrix(lu)
+    abd_inv = np.linalg.inv(np.block([[A * 1e9, B], [B, D]]))
+    plies = [r for _, r in lu.iterrows() if r["Material_name"] != "Core"]
+
+    def check(N2, M2):
+        ek = abd_inv @ np.array([0.0, N2, 0.0, 0.0, M2, 0.0])
+        best = None
+        for r in plies:
+            for loc, z in (("Outer", r["TopHeight"]), ("Inner", r["BottomHeight"])):
+                stress = r["Q matrix"] @ cc._strain_off_to_on(r["Orientation (deg)"], ek[:3] + z * ek[3:])
+                stress[np.abs(stress) < 1e-9 * max(np.max(np.abs(stress)), 1e-300)] = 0.0
+                m = r["Material"]
+                found = [("max", mode, R) for mode, R in zip(_CRIT_MODES["max"], cc._maximum_stress_criterion(m, stress))]
+                found.append(("quad", None, cc._tsai_wu_quadratic_criterion(m, stress)))
+                found += [("hashin", mode, R) for mode, R in zip(_CRIT_MODES["hashin"], cc._hashin_failure_criteria(m, stress))]
+                for crit, mode, R in found:
+                    if R is not None and math.isfinite(R) and R > 0 and (best is None or R < best["R"]):
+                        best = {"R": float(R), "criterion": crit, "mode": mode, "layer": int(r["Layer #"]), "location": loc}
+        return best
+    return check
+
+
+def _ring_frame(pts, loads, EA, EI):
+    """
+    Quarter of the tube cross-section as a 2D frame of straight beam elements, from the top centre (x = 0) round to
+    the side-wall centre (y = 0), with symmetry conditions at both ends. loads: nodal force (fx, fy) per metre of tube.
+    Returns, for each element end, the hoop force N2 [N/m, tension +] and the hoop moment M2 [N] in the laminate
+    sign convention (+M2 stretches the outer surface, layer 1), the node index, and the closing of the tube [m]
+    between the top and bottom centres.
+    """
+    n = len(pts)
+    K, f, elems = np.zeros((3 * n, 3 * n)), np.zeros(3 * n), []
+    for i in range(n - 1):
+        dx, dy = pts[i + 1] - pts[i]
+        L = math.hypot(dx, dy)
+        c, s = dx / L, dy / L
+        k = np.zeros((6, 6))
+        k[np.ix_([0, 3], [0, 3])] = EA / L * np.array([[1, -1], [-1, 1]])
+        k[np.ix_([1, 2, 4, 5], [1, 2, 4, 5])] = EI / L ** 3 * np.array(
+            [[12, 6 * L, -12, 6 * L], [6 * L, 4 * L * L, -6 * L, 2 * L * L],
+             [-12, -6 * L, 12, -6 * L], [6 * L, 2 * L * L, -6 * L, 4 * L * L]])
+        Rm = np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
+        T = np.block([[Rm, np.zeros((3, 3))], [np.zeros((3, 3)), Rm]])
+        dof = np.r_[3 * i:3 * i + 6]
+        K[np.ix_(dof, dof)] += T.T @ k @ T
+        elems.append((i, dof, k @ T))
+    f[0::3], f[1::3] = loads[:, 0], loads[:, 1]
+    fixed = [0, 2, 3 * (n - 1) + 1, 3 * (n - 1) + 2]
+    free = np.setdiff1d(np.arange(3 * n), fixed)
+    u = np.zeros(3 * n)
+    u[free] = np.linalg.solve(K[np.ix_(free, free)], f[free])
+    out = []
+    for i, dof, kT in elems:
+        fl = kT @ u[dof]
+        # local y points out of the tube along this path, so sagging beam moment stretches the inner surface
+        out += [(-fl[0], fl[2], i), (fl[3], -fl[5], i + 1)]
+    return out, -2 * u[1]
+
+
+def _clamp(p):
+    """
+    Two identical clamp halves (U for a rectangular tube, C for a round one) screwed together around the tube with a
+    total preload F [N] over a contact length L [m]. Checks the tube wall (first-ply failure from ring bending, and
+    wall buckling) or, with a plug, the wall and plug in crushing; gives the force needed to slide the clamp.
+    """
+    lu = _build(p["layup"])
+    plies = lu[lu["Material_name"] != "Core"]
+    t = float(lu["Thickness (m)"].sum())
+    A, B, D = cc.calculate_A_B_D_matrix(lu)
+    EA, EI = A[1, 1] * 1e9, D[1, 1]                      # hoop direction, per metre of tube
+    F, L, mu, contact = p["preload"], p["length"], p["friction"], p["contact"]
+    q = F / L                                             # clamp line load on each face [N/m]
+    out = {"t": t, "has_core": bool(len(plies) < len(lu)), "q": q}
+
+    if p["shape"] == "round":
+        Rm = p["d_in"] / 2 + t / 2                        # mid-wall radius
+        R_out = Rm + t / 2
+        th = np.linspace(0.0, math.pi / 2, 31)            # from the top centre
+        pts = np.column_stack([Rm * np.sin(th), Rm * np.cos(th)])
+        loads = np.zeros_like(pts)
+        if contact == "even":
+            # a closely fitting C pressed down: contact pressure ~ cos(angle from the top), radial and inward
+            w = np.cos(th) * Rm * (th[1] - th[0])
+            w[[0, -1]] *= 0.5
+            loads = -np.column_stack([np.sin(th), np.cos(th)]) * w[:, None]
+            loads *= 0.5 / -loads[:, 1].sum()
+            normal = 8 / math.pi                          # total normal force on the tube / F, both halves
+        else:
+            loads[0, 1] = -0.5                            # contact along one line, top and bottom
+            normal = 2.0
+        regions = lambda i: "crown, under the clamp" if i <= 10 else "side, between the clamps" if i >= 20 else "shoulder"
+        flat_w = 2 * R_out
+        out.update(R_out=R_out, torque_arm=R_out)
+        # ring buckling under the clamp: hoop compression at the sides vs the ring buckling load 3 EI / R^2
+        N_side, N_cr = q / 2, 3 * EI / Rm ** 2
+        buckle_what = "ring buckling of the tube wall (3 EI / R², long-tube value, conservative for a short clamp)"
+        inner_w = p["d_in"]
+        peak = 4 / math.pi if contact == "even" else 1.0
+    else:
+        W, H = p["width"] + t, p["height"] + t           # mid-wall
+        r = min(p["radius"] + t / 2, W / 2, H / 2)
+        a, b = W / 2 - r, H / 2 - r
+        nf, na = 16, 12
+        pts = [(x, H / 2) for x in np.linspace(0, a, nf + 1)]
+        pts += [(a + r * math.sin(x), b + r * math.cos(x)) for x in np.linspace(0, math.pi / 2, na + 1)[1:]]
+        pts += [(W / 2, y) for y in np.linspace(b, 0, nf + 1)[1:]]
+        pts = np.array(pts)
+        loads = np.zeros_like(pts)
+        if contact == "even":
+            w = np.ones(nf + 1)
+            w[[0, -1]] = 0.5
+            loads[:nf + 1, 1] = -0.5 * w / w.sum()
+        else:
+            loads[nf, 1] = -0.5                           # a rigid U first touches where the flat meets the corner
+        normal = 2.0
+        regions = lambda i: "top face" if i < nf else "side wall" if i > nf + na else "corner"
+        flat_w = max(W + t - 2 * (r + t / 2), 1e-9)
+        out.update(torque_arm=None)
+        # side wall as a pinned wide column over its straight height, each carrying q/2
+        hs = H - 2 * r
+        N_side = q / 2
+        N_cr = math.pi ** 2 * EI / hs ** 2 if hs > 1e-6 else None
+        buckle_what = "side wall buckling as a pinned wide column (π² EI / h², conservative)"
+        inner_w = max(p["width"] - 2 * p["radius"], 1e-9)
+        peak = 1.0
+
+    modes = []
+    check = _hoop_checker(lu)
+    if not p["plug"]:
+        frame, squash = _ring_frame(pts, loads, EA, EI)
+        best = None
+        for N2, M2, node in frame:
+            res = check(N2 * q, M2 * q)
+            if res and (best is None or res["R"] < best["R"]):
+                best = dict(res, region=regions(node), N2=N2 * q, M2=M2 * q)
+        if best:
+            modes.append({"key": "fpf", "name": "Wall first-ply failure", "R": best["R"], "ply": best})
+        if N_cr:
+            modes.append({"key": "buckle", "name": "Wall buckling", "R": N_cr / N_side, "what": buckle_what,
+                          "N": N_side, "N_cr": N_cr})
+        out["squash"] = squash * q
+        out["M_max"] = max(abs(M) for _, M, _ in frame) * q
+    else:
+        # a plug fills the bore under the clamp: the wall cannot bend or buckle, it is squeezed between clamp and plug
+        p_wall = peak * F / (L * flat_w)
+        yc = min(float(r["Material"].Yc) for _, r in plies.iterrows()) * 1e6
+        modes.append({"key": "crush", "name": "Wall crushing through its thickness", "R": yc / p_wall,
+                      "pressure": p_wall, "strength": yc})
+        p_plug = peak * F / (L * inner_w)
+        modes.append({"key": "plug", "name": "Plug crushing", "R": p["plug_strength"] / p_plug,
+                      "pressure": p_plug, "strength": p["plug_strength"]})
+        out["squash"] = None
+    out["modes"] = modes
+    out["normal"] = normal * F
+    out["slide"] = mu * normal * F
+    return out
+
+
+_API = {"materials": _materials, "layers": _layers, "outline": _outline, "laminate": _laminate, "bending": _bending,
+        "torsion": _torsion, "failure": _failure, "wall_bending": _wall_bending, "bolt": _bolt, "clamp": _clamp}
 
 
 def api(name, payload):
@@ -818,6 +1201,7 @@ async function boot() {
     const r = call("materials", { csv: dbCsv, custom: loadCustom() });
     if (!r.ok) throw new Error(r.error);
     applyMaterials(r.result, true);
+    $("preset").disabled = false;
     status.textContent = `Ready · CC lib v${r.result.version}`;
     status.className = "ready";
     $("foot").textContent = `composites_calculator_lib v${r.result.version} (${r.result.update_date}) · Python runs locally via Pyodide.`;
@@ -1029,21 +1413,44 @@ function sectionSpec() {
   return { type, csv: $("pts").value, surface: $("surface").value };
 }
 function renderSectionPreview(sec) {
-  let pts = null, label = "inner surface";
-  if (sec.type === "circ") pts = Array.from({ length: 72 }, (_, i) => [(sec.d_in / 2) * Math.cos((i * Math.PI) / 36), (sec.d_in / 2) * Math.sin((i * Math.PI) / 36)]);
-  else if (sec.type === "rect") pts = rectCorners(sec.width, sec.height);
-  else if (sec.type === "arb") { pts = parsePoints(sec.csv); label = sec.surface + " surface"; }
-  if (!pts) { $("secPreview").innerHTML = ""; return; }
-  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  // The wall is drawn between the surface the dimensions describe (dark line) and the other surface, which the
+  // layup thickness puts outside it (inner surface given) or inside it (outer surface given).
+  const circle = (r) => Array.from({ length: 72 }, (_, i) => [r * Math.cos((i * Math.PI) / 36), r * Math.sin((i * Math.PI) / 36)]);
+  const inner = sec.type !== "arb" || sec.surface === "inner", label = (inner ? "inner" : "outer") + " surface";
+  let datum = null;
+  if (sec.type === "circ") datum = circle(sec.d_in / 2);
+  else if (sec.type === "rect") datum = rectCorners(sec.width, sec.height);
+  else datum = parsePoints(sec.csv);
+  if (!datum) { $("secPreview").innerHTML = ""; return; }
+  const box = (pts) => { const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]); return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]; };
+  const [dx0, dx1, dy0, dy1] = box(datum);
+  // wall thickness to scale, but never so thin that it cannot be seen
+  const h = state.lam ? state.lam.h_total : 0, d = h > 0 ? Math.max(h, 0.025 * Math.max(dx1 - dx0, dy1 - dy0)) : 0;
+  let other = null, marks = sec.type === "arb" ? datum : [];
+  if (d > 0) {
+    if (sec.type === "circ") other = circle(sec.d_in / 2 + d);
+    else if (sec.type === "rect") other = rectCorners(sec.width + 2 * d, sec.height + 2 * d);
+    else { const o = call("outline", { section: sec, d }); if (o.ok) { datum = o.result.datum; other = o.result.other; } }
+  }
+  const [x0, x1, y0, y1] = box(inner && other && other.length ? other : datum);
   // the shape sits above a strip that is kept clear for the axis arrows, so they never cover it
   const W = 420, H = 290, strip = 50, pad = 18, s = Math.min((W - 2 * pad) / (x1 - x0 || 1), (H - strip - 2 * pad) / (y1 - y0 || 1));
   const X = (x) => W / 2 + (x - (x0 + x1) / 2) * s, Y = (y) => (H - strip) / 2 - (y - (y0 + y1) / 2) * s;
+  const ring = (pts) => (pts && pts.length ? "M" + pts.map((p) => X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1)).join("L") + "Z" : "");
+  // the points that were entered, unless they are too closely spaced to tell apart
+  let dots = "", lx = null, ly = null;
+  for (const p of marks) {
+    const px = X(p[0]), py = Y(p[1]);
+    if (lx !== null && Math.hypot(px - lx, py - ly) < 7) { dots = ""; break; }
+    dots += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2.4" fill="var(--panel2)" stroke="var(--ink)" stroke-width="1.2"/>`; lx = px; ly = py;
+  }
   const ox = 14, oy = H - 12, ax = "var(--muted)";
-  $("secPreview").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cross-section outline with the x2 axis pointing right and the x3 axis pointing up">` +
-    `<polygon points="${pts.map((p) => X(p[0]).toFixed(1) + "," + Y(p[1]).toFixed(1)).join(" ")}" fill="var(--dia-soft)" stroke="var(--dia)" stroke-width="1.5" stroke-linejoin="round"/>` +
+  $("secPreview").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tube cross-section: the wall is shaded and the ${label}, which the dimensions describe, is the dark line. The x2 axis points right and the x3 axis points up">` +
+    (other ? `<path d="${ring(datum)}${ring(other)}" fill="var(--dia)" fill-opacity="0.3" fill-rule="evenodd"/>` +
+      `<path d="${ring(other)}" fill="none" stroke="var(--dia)" stroke-width="1" stroke-linejoin="round"/>` : "") +
+    `<path d="${ring(datum)}" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>` + dots +
     svgArrow(ox, oy, ox + 32, oy, ax) + svgArrow(ox, oy, ox, oy - 32, ax) + svgText(ox + 37, oy + 4, "x2", ax, "start") + svgText(ox + 7, oy - 24, "x3", ax, "start") + "</svg>" +
-    `<p class="hint" style="text-align:center;margin-top:4px">${label} · ${fmt((x1 - x0) * 1000)} × ${fmt((y1 - y0) * 1000)} mm</p>`;
+    `<p class="hint" style="text-align:center;margin-top:4px">${label} · ${fmt((dx1 - dx0) * 1000)} × ${fmt((dy1 - dy0) * 1000)} mm</p>`;
 }
 
 function renderTube(spec) {
@@ -1153,6 +1560,258 @@ function renderFailure(spec) {
     more("fail-log", "Additional information: library output", logBlock(f.log));
 }
 
+// ---------- bolted joint ----------
+// a factor from a preset select, or the custom value typed next to it
+function boltFactor(sel, customId) {
+  const custom = $(sel).value === "custom";
+  $(customId + "Wrap").hidden = !custom;
+  return custom ? numVal(customId) : parseFloat($(sel).value);
+}
+function boltSVG(d, e, w, ang) {
+  const s = Math.min(130 / w, 360 / (e + 1.5 * w)), x0 = 46, top = 34, bot = top + w * s, yc = (top + bot) / 2;
+  const xr = x0 + 24 + (e + 1.5 * w) * s, xc = xr - e * s, r = Math.max((d / 2) * s, 3);
+  const zig = [0, 1, 2, 3, 4, 5, 6].map((i) => `${x0 + (i % 2 ? 6 : 0)},${top + ((bot - top) * i) / 6}`).join(" ");
+  const ink = "var(--ink)", mu = "var(--muted)";
+  const dim = (x1, y1, x2, y2, label, lx, ly) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${mu}" stroke-width="1"/>` +
+    svgHead(x1, y1, Math.atan2(y1 - y2, x1 - x2), mu) + svgHead(x2, y2, Math.atan2(y2 - y1, x2 - x1), mu) +
+    `<text x="${lx}" y="${ly}" font-size="11" fill="${mu}" text-anchor="middle">${label}</text>`;
+  const fa = (ang * Math.PI) / 180, fx = 70, fy = bot + 52, fl = 26;
+  return `<svg viewBox="0 0 560 ${bot + 84}" role="img" aria-label="Laminate strip with a loaded bolt hole">` +
+    `<path d="M${x0},${top} L${xr},${top} L${xr},${bot} L${x0},${bot}" fill="var(--dia-soft)" stroke="${ink}" stroke-width="1.5"/>` +
+    `<polyline points="${zig}" fill="none" stroke="${ink}" stroke-width="1" stroke-dasharray="3 2"/>` +
+    `<circle cx="${xc}" cy="${yc}" r="${r}" fill="var(--panel)" stroke="${ink}" stroke-width="1.5"/>` +
+    `<path d="M${xc} ${yc - r - 2} A${r + 2} ${r + 2} 0 0 1 ${xc} ${yc + r + 2}" fill="none" stroke="var(--bad)" stroke-width="3.5" opacity="0.6"/>` +
+    `<circle cx="${xc}" cy="${yc}" r="${Math.max(r - 2, 1.5)}" fill="var(--muted)" opacity="0.35"/>` +
+    svgArrow(xc, yc, xc + Math.max(r + 34, 46), yc, "var(--bad)", 2) +
+    `<text x="${xc + Math.max(r + 34, 46) + 4}" y="${yc - 6}" font-size="12" fill="var(--bad)">P</text>` +
+    dim(xc, bot + 16, xr, bot + 16, "e", (xc + xr) / 2, bot + 30) +
+    `<line x1="${xc}" y1="${yc + r}" x2="${xc}" y2="${bot + 20}" stroke="${mu}" stroke-width="0.8" stroke-dasharray="2 2"/>` +
+    dim(xr + 18, top, xr + 18, bot, "w", xr + 30, yc + 4) +
+    `<text x="${xc}" y="${top - 8}" font-size="11" fill="${mu}" text-anchor="middle">d = ${fmt(d)} mm</text>` +
+    `<line x1="${fx - fl * Math.cos(fa)}" y1="${fy - fl * Math.sin(fa)}" x2="${fx + fl * Math.cos(fa)}" y2="${fy + fl * Math.sin(fa)}" stroke="var(--dia)" stroke-width="2"/>` +
+    `<text x="${fx + 38}" y="${fy + 4}" font-size="11" fill="${mu}">0° fibre direction (load at ${fmt(ang)}° to it)</text>` +
+    `<text x="${fx + 38}" y="${fy + 20}" font-size="11" fill="${mu}">Red arc: where the bolt bears on the hole wall</text></svg>`;
+}
+function renderBolt(spec) {
+  const out = $("boltOut");
+  const d = numVal("bD"), e = numVal("bE"), w = numVal("bWd"), P = numVal("bLoad"), ang = numVal("bAng");
+  const kFit = boltFactor("bFit", "bFitC"), kCon = boltFactor("bCon", "bConC"), kCl = parseFloat($("bClamp").value);
+  const C = numVal("bC"), kBr = numVal("bBrK"), refIn = $("bBrRef").value.trim() === "" ? null : numVal("bBrRef");
+  const bad = [];
+  if (![d, e, w, P, ang].every(Number.isFinite)) bad.push("Enter a number for every geometry and load field.");
+  else {
+    if (d <= 0) bad.push("The diameter must be above zero.");
+    if (e <= d / 2) bad.push("The edge distance must be more than half the diameter, or the hole breaks the edge.");
+    if (w <= d) bad.push("The width must be larger than the diameter.");
+    if (P < 0) bad.push("Enter the load as a positive number; its direction is set by the angle.");
+  }
+  if (![kFit, kCon, C, kBr].every((v) => Number.isFinite(v) && v >= 0) || (refIn !== null && !(refIn > 0))) bad.push("Factors and strengths must be positive numbers.");
+  $("boltDiagram").innerHTML = bad.length && !(d > 0 && e > d / 2 && w > d) ? "" : boltSVG(d, e, w, Number.isFinite(ang) ? ang : 0);
+  if (bad.length) { out.innerHTML = bad.map(errHTML).join(""); return; }
+  const res = call("bolt", { layup: spec, angle: ang });
+  if (!res.ok) { out.innerHTML = errHTML(res.error); return; }
+  const r = res.result, t = r.t * 1000;  // mm, plies only
+  const sT = r.tension.stress / 1e6, sC = r.compression.stress / 1e6, sS = r.shear.stress / 1e6;  // MPa
+  // bearing: reference strength for a smooth pin in a tight, unclamped hole, scaled by the fit, contact and clamping
+  const brRef = refIn !== null ? refIn : kBr * sC, sBr = brRef * kFit * kCon * kCl;
+  const Pbr = sBr * d * t;
+  // net-tension (Hart-Smith): elastic stress concentration of a loaded hole, relieved by the notch sensitivity C
+  const wd = w / d, ew = e / w, theta = ew < 1 ? 1.5 - 0.5 / ew : 1;
+  const kte = 2 + (wd - 1) - 1.5 * ((wd - 1) / (wd + 1)) * theta, ktc = 1 + C * (kte - 1);
+  const Pnt = (sT * (w - d) * t) / ktc;
+  // shear-out: two shear planes from the hole to the free edge
+  const Pso = 2 * (e - d / 2) * t * sS;
+  const modes = [
+    { key: "br", name: "Bearing", P: Pbr, what: "the hole wall crushes under the bolt and the hole elongates. Gradual and usually the preferred failure." },
+    { key: "nt", name: "Net-tension", P: Pnt, what: "the laminate snaps across the hole, through the width beside it. Sudden." },
+    { key: "so", name: "Shear-out", P: Pso, what: "a plug between the hole and the free edge shears out. Sudden." },
+  ];
+  const gov = modes.reduce((a, m) => (m.P < a.P ? m : a)), R = P > 0 ? gov.P / P : null, ok = R === null || R >= 1;
+  const basis = (x) => (x.basis === "fibre" ? "fibre failure once the matrix has cracked" : "first-ply failure");
+  // which ply fails first: each joint mode rests on one laminate strength in the load axes
+  const strOf = { br: r.compression, nt: r.tension, so: r.shear };
+  const strName = { br: "compression along the load", nt: "tension along the load", so: "in-plane shear" };
+  const scaled = (m) => !(m.key === "br" && refIn !== null);  // an entered bearing strength is not tied to the plies
+  const modeTxt = (mode) => MODE_NAMES[mode.split("_")[1]] || "combined stress";
+  const where = (s) => `Layer ${s.layer} ${s.location.toLowerCase()}`;
+  const jointP = (m, stress) => (scaled(m) ? (m.P * stress) / strOf[m.key].stress : null);
+  const critical = (m) => {
+    const x = strOf[m.key], f = x.first;
+    if (!f) return { value: "—", note: "no ply is loaded" };
+    if (x.basis === "fibre" && x.fibre_at) {
+      const pf = jointP(m, f.R / r.t);
+      return { value: `${where(x.fibre_at)}, ${modeTxt(x.fibre_at.mode)}`,
+        note: `fibre failure after the matrix has cracked. Cracking starts first in ${where(f).toLowerCase()} (${CRIT_NAMES[f.criterion]}, ${modeTxt(f.mode)})${pf !== null ? ` at ≈ ${fmt(pf, 3)} N` : ""}` };
+    }
+    return { value: `${where(f)}, ${modeTxt(f.mode)}`, note: `first-ply failure, ${CRIT_NAMES[f.criterion]}` };
+  };
+  const govCrit = critical(gov);
+  const plyTable = '<div class="scroll"><table class="grid"><thead><tr><th class="l">Joint failure</th><th class="l">Laminate loading</th>' +
+    '<th class="l">Maximum stress</th><th class="l">Tsai-Wu</th><th class="l">Hashin</th><th class="l">Used for strength</th></tr></thead><tbody>' +
+    modes.map((m) => {
+      const x = strOf[m.key];
+      const cell = (s) => {
+        if (!s) return "<td class='l'>not loaded</td>";
+        const pj = jointP(m, s.stress), low = x.first && x.first.R === s.R;
+        return `<td class="l${low ? " min" : ""}">${where(s)}<br><small>${modeTxt(s.mode)}${pj !== null ? ` · P ≈ ${fmt(pj, 4)} N` : ""}</small></td>`;
+      };
+      const used = x.basis === "fibre" && x.fibre_at ? `${where(x.fibre_at)}<br><small>fibre failure, matrix cracked · P ≈ ${fmt(m.P, 4)} N</small>`
+        : x.first ? `${where(x.first)}<br><small>first-ply failure · P ≈ ${fmt(m.P, 4)} N</small>` : "—";
+      return `<tr${m === gov ? ' class="govrow"' : ""}><td class="l"><b>${m.name}</b>${m === gov ? " " + chip("bad", "governs") : ""}</td><td class="l">${strName[m.key]}</td>` +
+        ["max", "quad", "hashin"].map((k) => cell(x.criteria[k])).join("") + `<td class="l">${used}</td></tr>`;
+    }).join("") + "</tbody></table></div>";
+  const geo = [];
+  if (e / d < 3) geo.push(`Edge distance e/d = ${fmt(e / d, 3)} is below 3: shear-out and cleavage become likely. Aim for e/d ≥ 3.`);
+  if (w / d < 4) geo.push(`Width w/d = ${fmt(w / d, 3)} is below 4: net-tension will tend to govern. Aim for w/d ≥ 4–5 so bearing governs.`);
+  if (r.has_core) geo.push(`This layup has a core. The bolt is taken to bear on the face skins only (${fmt(t)} mm of plies together); core crushing and skin pull-through are not checked. Use a potted insert or solid core around the bolt.`);
+  if (kCon < 1 && kCl === 1) geo.push("Threads bearing on an unclamped laminate: the thread crests saw into the hole wall under vibration or cyclic load. Use a bolt with a plain shank through the laminate where possible.");
+  out.innerHTML =
+    (ok ? "" : `<div class="note bad">The hole fails under ${fmt(P)} N: ${gov.name.toLowerCase()} at ${fmt(gov.P)} N.</div>`) +
+    geo.map((g) => `<div class="note warn">${g}</div>`).join("") +
+    primary([
+      { name: "Safety factor", sym: "R", value: R === null ? "—" : fmt(R, 4), tone: R === null ? "" : ok ? "good" : "bad",
+        note: R === null ? "enter a load" : chip(ok ? "good" : "bad", ok ? "Holds" : "Fails") + ` at P = ${fmt(P)} N` },
+      { name: "Joint strength", sym: "P<sub>max</sub>", value: fmt(gov.P, 4), unit: "N", note: `≈ ${fmt(gov.P / 9.81, 3)} kg sideways` },
+      { name: "Governing failure", text: true, value: gov.name, note: gov.key === "br" ? "gradual, the preferred mode" : "sudden, change the geometry" },
+      { name: "Bearing stress", sym: "σ<sub>br</sub>", value: fmt(P / (d * t), 4), unit: "MPa", note: `allowable ${fmt(sBr, 4)} MPa` },
+    ]) +
+    "<h3>Critical ply</h3>" + secondary([{ name: `${gov.name}: the laminate's strength in ${strName[gov.key]}`, value: govCrit.value,
+      note: cap(govCrit.note) + (scaled(gov) ? "" : ". The bearing strength used is the one you entered, so the ply readout is for reference only.") }]) +
+    "<h3>Which ply fails first, by criterion</h3>" + plyTable +
+    '<p class="hint">Each joint failure mode rests on one laminate strength in the load axes. A cell shows the ply that fails first under that loading by each criterion, and the bolt load P at which that happens. Highlighted cells are the lowest of the three criteria. “Used for strength” is what sets the joint strength: the higher of first-ply failure and fibre failure after the matrix has cracked.' +
+    (refIn !== null ? " Bearing loads are not shown because the bearing strength is entered, not derived from the plies." : "") + "</p>" +
+    "<h3>Strength by failure mode</h3>" + secondary(modes.map((m) => ({ name: m.name, sym: "P", value: fmt(m.P, 4), unit: "N",
+      note: (P > 0 ? `R = ${fmt(m.P / P, 4)}. ` : "") + cap(m.what) }))) +
+    "<h3>Factors applied to bearing</h3>" + secondary([
+      { name: "Reference bearing strength", value: fmt(brRef, 4), unit: "MPa", note: refIn !== null ? "entered" : `estimate: ${fmt(kBr)} × laminate compression strength` },
+      { name: "Hole quality and fit", sym: "k<sub>fit</sub>", value: fmt(kFit, 3) },
+      { name: "Contact", sym: "k<sub>contact</sub>", value: fmt(kCon, 3), note: kCon < 1 ? "threads" : "smooth" },
+      { name: "Clamping", sym: "k<sub>clamp</sub>", value: fmt(kCl, 3) },
+      { name: "Allowable bearing strength", sym: "σ<sub>br</sub>", value: fmt(sBr, 4), unit: "MPa", note: "reference × k<sub>fit</sub> × k<sub>contact</sub> × k<sub>clamp</sub>" },
+    ]) +
+    more("bolt-detail", "Detailed results: laminate strengths in the load axes and formulas",
+      secondary([
+        { name: "Laminate thickness at the bolt", sym: "t", value: fmt(t), unit: "mm", note: r.has_core ? "face skins only" : "" },
+        { name: "Tension strength along the load", sym: "σ<sub>t</sub>", value: fmt(sT, 4), unit: "MPa", note: basis(r.tension) },
+        { name: "Compression strength along the load", sym: "σ<sub>c</sub>", value: fmt(sC, 4), unit: "MPa", note: basis(r.compression) },
+        { name: "In-plane shear strength", sym: "τ", value: fmt(sS, 4), unit: "MPa", note: basis(r.shear) },
+        { name: "Elastic stress concentration, loaded hole", sym: "k<sub>te</sub>", value: fmt(kte, 4) },
+        { name: "Effective stress concentration", sym: "k<sub>tc</sub>", value: fmt(ktc, 4), note: `1 + C (k<sub>te</sub> − 1), C = ${fmt(C)}` },
+      ]) +
+      `<p class="hint">Bearing P = σ<sub>br</sub> · d · t. Net-tension P = σ<sub>t</sub> (w − d) t / k<sub>tc</sub>, with Hart-Smith's k<sub>te</sub> = 2 + (w/d − 1) − 1.5 θ (w/d − 1)/(w/d + 1), θ = 1 for e/w ≥ 1, else 1.5 − 0.5 w/e. ` +
+      `Shear-out P = 2 (e − d/2) t τ. Laminate strengths come from the layup by laminate theory: each is the higher of first-ply failure and fibre failure after the matrix has cracked (ply stiffnesses E<sub>y</sub> and E<sub>s</sub> cut to 1 %), because the laminate around a hole keeps carrying load past matrix cracking.</p>` +
+      `<p class="hint">These are engineering estimates for a bolt in double shear (the laminate between two plates, or the bolt held square). In single shear the bolt tilts and bearing strength drops by roughly 10–20 %. Cleavage, fatigue, hot/wet conditions and bolt bending are not checked; test critical joints.</p>`) +
+    more("bolt-log", "Additional information: library output", logBlock(res.log));
+}
+
+// ---------- tube clamp ----------
+function clampSVG(shape, t, dims, plug, contact) {
+  const cx = 200, cy = 118, g = 4, jaw = 12, ink = "var(--ink)";
+  let tube, upper, Fx, s, Wo, Ho;
+  if (shape === "round") {
+    const Rr = dims.d_in / 2 + t; s = 62 / Rr;
+    const Ro = Rr * s, Ri = Math.max((dims.d_in / 2) * s, 1), Rc = Ro + jaw; Wo = Ho = 2 * Ro; Fx = Ro + 46;
+    const xo = Math.sqrt(Rc * Rc - (g + jaw) ** 2);
+    upper = `M${cx - Fx},${cy - g} V${cy - g - jaw} H${cx - xo} A${Rc} ${Rc} 0 0 1 ${cx + xo},${cy - g - jaw} H${cx + Fx} V${cy - g} Z`;
+    tube = `<circle cx="${cx}" cy="${cy}" r="${Ro}" fill="var(--dia-soft)" stroke="${ink}" stroke-width="1.2"/>` +
+      `<circle cx="${cx}" cy="${cy}" r="${Ri}" fill="${plug ? "var(--warn-bg)" : "var(--panel2)"}" stroke="${ink}" stroke-width="1.2"/>`;
+  } else {
+    const W = dims.width + 2 * t, H = dims.height + 2 * t; s = Math.min(170 / W, 120 / H);
+    Wo = W * s; Ho = H * s; Fx = Wo / 2 + jaw + 34;
+    const wi = dims.width * s, hi = dims.height * s, ro = (dims.radius + t) * s, ri = dims.radius * s;
+    upper = `M${cx - Fx},${cy - g} V${cy - g - jaw} H${cx - Wo / 2 - jaw} V${cy - Ho / 2 - jaw} H${cx + Wo / 2 + jaw} V${cy - g - jaw} H${cx + Fx} V${cy - g} Z`;
+    tube = `<rect x="${cx - Wo / 2}" y="${cy - Ho / 2}" width="${Wo}" height="${Ho}" rx="${ro}" fill="var(--dia-soft)" stroke="${ink}" stroke-width="1.2"/>` +
+      `<rect x="${cx - wi / 2}" y="${cy - hi / 2}" width="${wi}" height="${hi}" rx="${ri}" fill="${plug ? "var(--warn-bg)" : "var(--panel2)"}" stroke="${ink}" stroke-width="1.2"/>`;
+  }
+  const clamp = (flip) => `<path d="${upper}" fill="var(--line)" stroke="${ink}" stroke-width="1.2"${flip ? ` transform="translate(0 ${2 * cy}) scale(1 -1)"` : ""}/>`;
+  const screw = (x) => `<line x1="${x}" y1="${cy - g - jaw - 6}" x2="${x}" y2="${cy + g + jaw + 10}" stroke="${ink}" stroke-width="3"/>` +
+    `<rect x="${x - 6}" y="${cy - g - jaw - 11}" width="12" height="5" fill="${ink}"/>` +
+    svgArrow(x, cy - g - jaw - 40, x, cy - g - jaw - 14, "var(--bad)");
+  // where the clamp presses: whole contact face, or the line a rigid clamp touches first
+  let marks = "";
+  const top = cy - Ho / 2;
+  if (contact === "line") {
+    const xs = shape === "round" ? [cx] : [cx - Wo / 2 + (dims.radius + t) * s, cx + Wo / 2 - (dims.radius + t) * s];
+    marks = xs.map((x) => `<circle cx="${x}" cy="${top}" r="3.5" fill="var(--bad)"/><circle cx="${x}" cy="${cy + Ho / 2}" r="3.5" fill="var(--bad)"/>`).join("");
+  } else if (shape === "round") {
+    const R = Wo / 2 + 1.5;
+    marks = [-1, 1].map((d) => `<path d="M${cx - R} ${cy} A${R} ${R} 0 0 ${d > 0 ? 1 : 0} ${cx + R} ${cy}" fill="none" stroke="var(--bad)" stroke-width="2.5" opacity="0.55"/>`).join("");
+  } else {
+    marks = [top - 1.5, cy + Ho / 2 + 1.5].map((y) => `<line x1="${cx - Wo / 2 + (dims.radius + t) * s}" y1="${y}" x2="${cx + Wo / 2 - (dims.radius + t) * s}" y2="${y}" stroke="var(--bad)" stroke-width="2.5" opacity="0.55"/>`).join("");
+  }
+  return `<svg viewBox="0 0 400 ${cy * 2 + 26}" role="img" aria-label="Tube cross-section with two clamp halves">` +
+    clamp(false) + clamp(true) + tube + marks + screw(cx - Fx + 16) + screw(cx + Fx - 16) +
+    `<text x="${cx}" y="${cy * 2 + 4}" font-size="11" fill="var(--muted)" text-anchor="middle">${plug ? "Plug fills the bore · " : ""}red: where the clamp presses on the tube</text>` +
+    `<text x="${cx - Fx + 16}" y="${cy - g - jaw - 44}" font-size="11" fill="var(--bad)" text-anchor="middle">F/2</text>` +
+    `<text x="${cx + Fx - 16}" y="${cy - g - jaw - 44}" font-size="11" fill="var(--bad)" text-anchor="middle">F/2</text></svg>`;
+}
+function renderTorqueHelper() {
+  const n = numVal("cnS"), d = numVal("cdS") / 1000, T = numVal("cTq"), K = numVal("cK");
+  const F = n * T / (K * d);
+  state.clampTorqueF = Number.isFinite(F) && F > 0 ? F : null;
+  $("cTqOut").textContent = state.clampTorqueF ? `Preload ≈ ${fmt(T / (K * d), 4)} N per screw, F ≈ ${fmt(F, 4)} N in total (F = n T / (K d)). ` +
+    "K is about 0.2 for dry steel screws and 0.15 lubricated; the real preload scatters by roughly ±25 % for a given torque." : "Enter positive numbers.";
+}
+function renderClamp(spec) {
+  const out = $("clampOut"), shape = $("cShape").value, plug = $("cPlug").value === "1";
+  $("cRound").hidden = shape !== "round"; $("cRect").hidden = shape !== "rect"; $("cPlugWrap").hidden = !plug;
+  const p = { layup: spec, shape, plug, contact: $("cContact").value, length: numVal("cL") / 1000, preload: numVal("cF"),
+    friction: numVal("cMu"), plug_strength: numVal("cPlugS") * 1e6, d_in: numVal("cD") / 1000,
+    width: numVal("cW") / 1000, height: numVal("cH") / 1000, radius: numVal("cR") / 1000 };
+  const bad = [];
+  if (shape === "round" && !(p.d_in > 0)) bad.push("Enter an inner diameter greater than zero.");
+  if (shape === "rect" && !(p.width > 0 && p.height > 0 && p.radius >= 0)) bad.push("Enter an inner width and height greater than zero and a corner radius of zero or more.");
+  if (shape === "rect" && p.radius * 2 >= Math.min(p.width, p.height)) bad.push("The corner radius must be less than half the smaller inner side; use the round shape for a round tube.");
+  if (!(p.length > 0) || !(p.preload > 0)) bad.push("Enter a contact length and a preload greater than zero.");
+  if (!(p.friction >= 0)) bad.push("Enter a friction coefficient of zero or more.");
+  if (plug && !(p.plug_strength > 0)) bad.push("Enter the plug's compressive strength.");
+  const t = state.lam ? state.lam.h_total : 0;
+  $("clampDiagram").innerHTML = bad.length ? "" : clampSVG(shape, t, p, plug, p.contact);
+  if (bad.length) { out.innerHTML = bad.map(errHTML).join(""); return; }
+  const res = call("clamp", p);
+  if (!res.ok) { out.innerHTML = errHTML(res.error); return; }
+  const r = res.result, F = p.preload;
+  if (!r.modes.length) { out.innerHTML = '<p class="hint">No ply is loaded.</p>'; return; }
+  const gov = r.modes.reduce((a, m) => (m.R < a.R ? m : a)), R = gov.R, ok = R >= 1;
+  const modeTxt = (m) => MODE_NAMES[m] || "combined stress";
+  const plyTxt = (x) => `Layer ${x.layer}, ${x.location.toLowerCase()} surface, at the ${x.region}`;
+  const fpf = r.modes.find((m) => m.key === "fpf");
+  const detail = (m) => ({
+    fpf: () => `${plyTxt(m.ply)}: ${modeTxt(m.ply.mode)} by ${CRIT_NAMES[m.ply.criterion]}. Hoop force N₂ = ${fmt(m.ply.N2, 4)} N/m, hoop moment M₂ = ${fmt(m.ply.M2, 4)} N·m/m there.`,
+    buckle: () => `Hoop compression in the wall beside the clamp ${fmt(m.N, 4)} N/m, buckling at ${fmt(m.N_cr, 4)} N/m: ${m.what}.`,
+    crush: () => `Contact pressure ${fmt(m.pressure / 1e6, 4)} MPa against ${fmt(m.strength / 1e6, 4)} MPa, the lowest transverse compressive strength Y<sub>c</sub> of the plies, taken as the through-thickness strength.`,
+    plug: () => `Pressure on the plug ${fmt(m.pressure / 1e6, 4)} MPa against its strength ${fmt(m.strength / 1e6, 4)} MPa.`,
+  }[m.key]());
+  const warn = [];
+  if (r.has_core) warn.push("This layup has a core: the whole sandwich is taken as the tube wall. Crushing of the core under the clamp is not checked.");
+  if (plug && p.contact === "line") warn.push("With a concentrated contact the pressure is spread over the clamp face here; the real peak at the contact line is higher. Fit the clamp to the tube.");
+  if (!plug && fpf && fpf === gov && fpf.ply.region === "top face") warn.push("Even pressure bends the wide clamped face between the side walls, and that is what fails. A clamp face relieved in the middle, bearing only near the corners, puts the load straight into the side walls (try the concentrated contact), or a plug stops the face bending.");
+  out.innerHTML =
+    (ok ? "" : `<div class="note bad">The tube fails at this preload: ${gov.name.toLowerCase()}. Keep the preload below ${fmt(F * R, 4)} N.</div>`) +
+    warn.map((w) => `<div class="note warn">${w}</div>`).join("") +
+    primary([
+      { name: "Safety factor", sym: "R", value: fmt(R, 4), tone: ok ? "good" : "bad", note: chip(ok ? "good" : "bad", ok ? "Holds" : "Fails") + " " + gov.name.toLowerCase() },
+      { name: "Force to slide the clamp", sym: "F<sub>slide</sub>", value: fmt(r.slide, 4), unit: "N", note: `μ × total contact force ${fmt(r.normal, 4)} N` },
+      { name: "Highest preload", sym: "F<sub>max</sub>", value: fmt(F * R, 4), unit: "N", note: `slide force there ${fmt(r.slide * R, 4)} N` },
+      r.squash !== null ? { name: "Tube squash", sym: "δ", value: fmt(r.squash * 1000, 3), unit: "mm", note: "closing between the clamped faces" }
+        : { name: "Plug pressure", value: fmt(r.modes.find((m) => m.key === "plug").pressure / 1e6, 4), unit: "MPa" },
+    ]) +
+    (fpf ? "<h3>Critical ply</h3>" + secondary([{ name: "First-ply failure of the wall", value: plyTxt(fpf.ply), note: `${cap(modeTxt(fpf.ply.mode))} by ${CRIT_NAMES[fpf.ply.criterion]}, R = ${fmt(fpf.R, 4)}` }]) : "") +
+    "<h3>Safety factor by failure mode</h3>" + secondary(r.modes.map((m) => ({ name: m.name + (m === gov ? " " + chip("bad", "governs") : ""), sym: "R", value: fmt(m.R, 4), note: detail(m) }))) +
+    "<h3>Grip</h3>" + secondary([
+      { name: "Clamp line load on each face", sym: "q", value: fmt(r.q / 1000, 4), unit: "N/mm", note: "F / contact length" },
+      { name: "Total contact force on the tube", value: fmt(r.normal, 4), unit: "N", note: shape === "round" && p.contact === "even" ? "8F/π: a fitted C presses at an angle round the tube, so the contact force exceeds F (wedge effect)" : "2F: F on each clamp half" },
+      { name: "Force to slide along the tube", sym: "F<sub>slide</sub>", value: fmt(r.slide, 4), unit: "N" },
+      r.torque_arm ? { name: "Torque to turn the clamp round the tube", value: fmt(r.slide * r.torque_arm, 4), unit: "N·m" } : null,
+    ]) +
+    more("clamp-detail", "Detailed results: model and assumptions",
+      `<p class="hint">${plug ? "With a plug, the wall cannot bend or buckle: it is squeezed between clamp and plug. The plug is taken to be stiff enough to carry the whole clamp load; a soft foam plug lets the wall bend, so check the hollow case too." :
+        "The quarter cross-section is solved as a 2D ring frame with the wall's hoop stiffnesses A₂₂ and D₂₂ (per metre of tube), loaded by the clamp line load F/L on each face. Every point of the ring is checked for first-ply failure by maximum stress, Tsai-Wu and Hashin. The tube is taken as clamped uniformly along the contact length; the stiffening from the tube beyond the clamp ends is ignored, which is conservative."}` +
+      ` Even contact on a round tube is a pressure that falls off as the cosine of the angle from the top. Concentrated contact is a line load at the crown (round) or where the flat meets the corner (rectangular). ` +
+      `The slide force is μ times the contact force: it is the static friction limit with no other loads on the clamp, and preload scatter and creep of the composite under the clamp will reduce it in service.</p>`) +
+    more("clamp-log", "Additional information: library output", logBlock(res.log));
+}
+
 // ---------- beam ----------
 function fillSource(id, options) {
   const sel = $(id), prev = sel.value;
@@ -1181,6 +1840,7 @@ function renderBeam() {
 
   const EI = sourceValue("eiSrc", "eiCustom"), L = numVal("bL") / 1000, F = udl ? numVal("bW") : numVal("bP");
   if (!(EI > 0) || !(L > 0) || !Number.isFinite(F)) {
+    $("beamDiagram").innerHTML = "";
     $("beamOut").innerHTML = errHTML(!(EI > 0) ? "No bending stiffness available. Fix the tube section, or choose a custom EI." : "Enter a length greater than zero and a load.");
   } else {
     let a = numVal("bA") / 1000;
@@ -1208,7 +1868,8 @@ function renderBeam() {
         rHint = '<p class="hint">R checks the tube wall where the bending moment is largest, at the point furthest from the neutral axis, on both the tension and compression sides, using the lowest of the three criteria in the Failure module. Transverse shear, buckling and crushing under the load points are not checked.</p>';
       } else rHint = errHTML("Safety factor: " + w.error);
     }
-    $("beamOut").innerHTML = '<div class="diagram">' + beamSVG(kind, L, a, ys, im) + "</div>" +
+    $("beamDiagram").innerHTML = beamSVG(kind, L, a, ys, im);
+    $("beamOut").innerHTML =
       (low && low.R < 1 ? '<div class="note bad">The tube wall fails under this load (R below 1).</div>' : "") +
       primary([
         { name: "Maximum deflection", sym: "δ<sub>max</sub>", value: fmt(Math.abs(dmax) * 1000, 4), unit: "mm", note: `at x = ${fmt(xmax * 1000)} mm` },
@@ -1346,11 +2007,67 @@ function beamSVG(kind, L, a, ys, im) {
     `<text x="${Math.min(Math.max(xm, 130), 430).toFixed(1)}" y="${ym + (up ? -9 : 16)}" text-anchor="middle" font-size="11" fill="var(--muted)">δ max = ${fmt(Math.abs(ys[im]) * 1000)} mm ${up ? "upward " : ""}(shape exaggerated)</text></svg>`;
 }
 
+// ---------- presets: off-the-shelf parts ----------
+// inner outline of a rectangular tube with rounded corners, as x2,x3 points in metres (width along x2)
+function roundedRectPoints(width, height, radius, stepDeg = 3) {
+  const a = width / 2 - radius, b = height / 2 - radius, n = Math.round(90 / stepDeg), rows = ["x2,x3"];
+  [[a, b, 0], [-a, b, 90], [-a, -b, 180], [a, -b, 270]].forEach(([cx, cy, start]) => {
+    for (let i = 0; i <= n; i++) {
+      const th = ((start + (90 * i) / n) * Math.PI) / 180;
+      rows.push(`${(cx + radius * Math.cos(th)).toFixed(6)},${(cy + radius * Math.sin(th)).toFixed(6)}`);
+    }
+  });
+  return rows.join("\n");
+}
+// A preset names a database material, the ply sequence and stacking, optional per-layer overrides
+// ({layer number: {material, thickness [m], orientation}}) and the tube section as sectionSpec() would return it.
+const PRESETS = [
+  {
+    id: "dragonplate_braided_rect_2x1_050",
+    name: "DragonPlate braided rectangular tube 2″ × 1″, 0.050″ wall",
+    material: "DragonPlate_TR30S_Epoxy_UD", seq: "+-45/0", mode: "so", overrides: {},
+    section: { type: "arb", surface: "inner", csv: roundedRectPoints(0.050292, 0.025146, 0.0035687) },
+    clamp: { width: 0.050292, height: 0.025146, radius: 0.0035687 },
+    note: "Estimated from DragonPlate's published data (SKU FDPBT-R*2x1x48T) and the wall thickness and weight measured on four tubes: ±45° braid / 0° uni / ±45° braid, 1.06 mm wall, " +
+      "inside 50.29 × 25.15 mm with 3.57 mm corner radius. The uni layer is assumed to be one third of the wall and the ply " +
+      "strengths are estimates, so treat the results as approximate. EI₂ is the tube bent flat, EI₃ on edge.",
+  },
+];
+$("preset").insertAdjacentHTML("beforeend", PRESETS.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join(""));
+function clearPreset() { $("preset").value = ""; $("presetNote").hidden = true; }
+function applyPreset(id) {
+  const p = PRESETS.find((x) => x.id === id), note = $("presetNote");
+  if (!p) { clearPreset(); return; }
+  if (!matByName(p.material)) {
+    $("preset").value = ""; note.hidden = false;
+    note.textContent = `This preset needs the material “${p.material}”, which is not in the material database.`;
+    return;
+  }
+  $("baseMat").value = p.material;
+  $("seq").value = p.seq;
+  setMode(p.mode);
+  state.overrides = JSON.parse(JSON.stringify(p.overrides || {}));
+  const s = p.section;
+  $("secType").value = s.type;
+  if (s.type === "circ") $("dIn").value = trim6(s.d_in * 1000);
+  if (s.type === "rect") { $("rH").value = trim6(s.height * 1000); $("rW").value = trim6(s.width * 1000); }
+  if (s.type === "arb") { $("pts").value = s.csv; $("surface").value = s.surface; }
+  if (p.clamp) { $("cShape").value = "rect"; $("cW").value = trim6(p.clamp.width * 1000); $("cH").value = trim6(p.clamp.height * 1000); $("cR").value = trim6(p.clamp.radius * 1000); }
+  note.textContent = p.note; note.hidden = !p.note;
+  recalc();
+}
+$("preset").addEventListener("change", (e) => applyPreset(e.target.value));
+// any manual change to the layup or the tube geometry means the inputs are no longer the preset
+["layupCol", "tubeGeom"].forEach((id) => {
+  $(id).addEventListener("input", (e) => { if (e.target.id !== "preset") clearPreset(); });
+  $(id).addEventListener("click", (e) => { if (e.target.closest("button")) clearPreset(); });
+});
+
 // ---------- recalculation ----------
 function recalc() {
   if (!pyApi) return;
   const spec = layupSpec();
-  const dependents = ["lamOut", "bendOut", "torOut", "failOut"];
+  const dependents = ["lamOut", "bendOut", "torOut", "failOut", "boltOut", "clampOut"];
   $("layupError").innerHTML = "";
   $("layupWarn").innerHTML = "";
   if (!spec) {
@@ -1377,6 +2094,8 @@ function recalc() {
   renderLaminate(lam.result, lam.log);
   renderTube(spec);
   renderFailure(spec);
+  renderBolt(spec);
+  renderClamp(spec);
   renderHelper();
   renderBeam();
 }
@@ -1389,6 +2108,8 @@ const MODULES = {
   tube: ["Tube Stiffness", "Bending and torsion of a tube whose wall is the current layup."],
   failure: ["Failure", "Ply-by-ply safety factors of the layup under applied stress and moment resultants."],
   beam: ["Beam", "Deflection and strength of a beam made from the current tube."],
+  clamp: ["Tube Clamp", "A tube gripped by two clamp halves screwed together: whether the wall survives the preload, and the force needed to slide the clamp along the tube."],
+  bolt: ["Bolted Joint","How much sideways load a bolt or dowel through a drilled hole in the laminate can take: bearing, net-tension and shear-out."],
   materials: ["Materials", "Ply material properties available to the layup builder."],
   upcoming: ["Upcoming", "Features planned for later versions."],
 };
@@ -1482,6 +2203,21 @@ $("matForm").addEventListener("submit", (e) => {
 });
 
 document.querySelectorAll(".hlive").forEach((el) => el.addEventListener("input", renderHelper));
+document.querySelectorAll(".tlive").forEach((el) => el.addEventListener("input", renderTorqueHelper));
+$("cTqApply").addEventListener("click", () => { if (state.clampTorqueF) { $("cF").value = trim6(state.clampTorqueF); recalc(); } });
+$("cCopy").addEventListener("click", () => {
+  const sec = sectionSpec(), msg = $("cCopyMsg");
+  const preset = PRESETS.find((x) => x.id === $("preset").value);
+  if (preset && preset.clamp) {
+    $("cShape").value = "rect"; $("cW").value = trim6(preset.clamp.width * 1000); $("cH").value = trim6(preset.clamp.height * 1000); $("cR").value = trim6(preset.clamp.radius * 1000);
+    msg.textContent = "Took the preset tube, gripped on its wide faces. Swap width and height to grip the narrow faces.";
+  } else if (sec.type === "circ" && !sec.error) { $("cShape").value = "round"; $("cD").value = trim6(sec.d_in * 1000); msg.textContent = "Took the round tube from Tube Stiffness."; }
+  else if (sec.type === "rect" && !sec.error) {
+    $("cShape").value = "rect"; $("cW").value = trim6(sec.width * 1000); $("cH").value = trim6(sec.height * 1000); $("cR").value = 0;
+    msg.textContent = "Took the rectangular tube from Tube Stiffness, gripped on its width faces, with sharp inside corners. Enter the real corner radius if it has one.";
+  } else { msg.textContent = "An arbitrary section from points cannot be used here; enter the size of the round or rectangular tube instead."; return; }
+  recalc();
+});
 $("hApply").addEventListener("click", () => {
   if (!state.helper) return;
   ["N1", "N2", "N6"].forEach((id, i) => ($(id).value = trim6(state.helper.N[i])));
@@ -1491,6 +2227,7 @@ $("hApply").addEventListener("click", () => {
 
 setMode("so");
 renderHelper();
+renderTorqueHelper();
 boot();
 </script>
 </body>
