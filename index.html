@@ -557,7 +557,7 @@ ul.road { margin: 0; padding-left: 18px; } ul.road li { margin-bottom: 10px; } u
                 <div style="grid-column: span 2"><label for="cContact">Contact between clamp and tube</label>
                   <select id="cContact" class="live">
                     <option value="even">Even: clamp bored or machined to fit, or with a soft liner</option>
-                    <option value="line">Concentrated: rigid clamp that touches first at one line (slight mismatch)</option>
+                    <option value="line">Concentrated: rigid clamp on a tube not quite its shape, touching first along a line (worst case)</option>
                   </select></div>
               </div>
               <div class="row">
@@ -1015,9 +1015,11 @@ def _clamp(p):
             loads = -np.column_stack([np.sin(th), np.cos(th)]) * w[:, None]
             loads *= 0.5 / -loads[:, 1].sum()
             normal = 8 / math.pi                          # total normal force on the tube / F, both halves
+            cases = [("even pressure round the clamp", loads)]
         else:
             loads[0, 1] = -0.5                            # contact along one line, top and bottom
             normal = 2.0
+            cases = [("a line at the crown", loads)]
         regions = lambda i: "crown, under the clamp" if i <= 10 else "side, between the clamps" if i >= 20 else "shoulder"
         flat_w = 2 * R_out
         out.update(R_out=R_out, torque_arm=R_out)
@@ -1040,8 +1042,14 @@ def _clamp(p):
             w = np.ones(nf + 1)
             w[[0, -1]] = 0.5
             loads[:nf + 1, 1] = -0.5 * w / w.sum()
+            cases = [("even pressure on the face", loads)]
         else:
-            loads[nf, 1] = -0.5                           # a rigid U first touches where the flat meets the corner
+            # a rigid U on a face that is not perfectly flat touches first along the face centre (face bulged out)
+            # or near the corners (face dished in); the worse of the two is used
+            centre, corner = np.zeros_like(pts), np.zeros_like(pts)
+            centre[0, 1] = -0.5
+            corner[nf, 1] = -0.5
+            cases = [("a line at the face centre", centre), ("lines near the corners", corner)]
         normal = 2.0
         regions = lambda i: "top face" if i < nf else "side wall" if i > nf + na else "corner"
         flat_w = max(W + t - 2 * (r + t / 2), 1e-9)
@@ -1057,12 +1065,15 @@ def _clamp(p):
     modes = []
     check = _hoop_checker(lu)
     if not p["plug"]:
-        frame, squash = _ring_frame(pts, loads, EA, EI)
-        best = None
-        for N2, M2, node in frame:
-            res = check(N2 * q, M2 * q)
-            if res and (best is None or res["R"] < best["R"]):
-                best = dict(res, region=regions(node), N2=N2 * q, M2=M2 * q)
+        best, frame, squash = None, None, 0.0
+        for label, case_loads in cases:
+            fr, sq = _ring_frame(pts, case_loads, EA, EI)
+            for N2, M2, node in fr:
+                res = check(N2 * q, M2 * q)
+                if res and (best is None or res["R"] < best["R"]):
+                    best = dict(res, region=regions(node), N2=N2 * q, M2=M2 * q, case=label)
+                    frame, squash = fr, sq
+        frame = frame or fr
         if best:
             modes.append({"key": "fpf", "name": "Wall first-ply failure", "R": best["R"], "ply": best})
         if N_cr:
@@ -1072,11 +1083,15 @@ def _clamp(p):
         out["M_max"] = max(abs(M) for _, M, _ in frame) * q
     else:
         # a plug fills the bore under the clamp: the wall cannot bend or buckle, it is squeezed between clamp and plug
-        p_wall = peak * F / (L * flat_w)
+        if contact == "even":
+            p_wall = peak * F / (L * flat_w)
+            p_plug = peak * F / (L * inner_w)
+        else:
+            # a line load, spread at 45 degrees through the wall: over about t at mid-wall, 2t on the plug
+            p_wall, p_plug = q / t, q / (2 * t)
         yc = min(float(r["Material"].Yc) for _, r in plies.iterrows()) * 1e6
         modes.append({"key": "crush", "name": "Wall crushing through its thickness", "R": yc / p_wall,
                       "pressure": p_wall, "strength": yc})
-        p_plug = peak * F / (L * inner_w)
         modes.append({"key": "plug", "name": "Plug crushing", "R": p["plug_strength"] / p_plug,
                       "pressure": p_plug, "strength": p["plug_strength"]})
         out["squash"] = None
@@ -1731,7 +1746,7 @@ function clampSVG(shape, t, dims, plug, contact) {
   let marks = "";
   const top = cy - Ho / 2;
   if (contact === "line") {
-    const xs = shape === "round" ? [cx] : [cx - Wo / 2 + (dims.radius + t) * s, cx + Wo / 2 - (dims.radius + t) * s];
+    const xs = shape === "round" ? [cx] : [cx - Wo / 2 + (dims.radius + t) * s, cx, cx + Wo / 2 - (dims.radius + t) * s];
     marks = xs.map((x) => `<circle cx="${x}" cy="${top}" r="3.5" fill="var(--bad)"/><circle cx="${x}" cy="${cy + Ho / 2}" r="3.5" fill="var(--bad)"/>`).join("");
   } else if (shape === "round") {
     const R = Wo / 2 + 1.5;
@@ -1774,7 +1789,7 @@ function renderClamp(spec) {
   if (!r.modes.length) { out.innerHTML = '<p class="hint">No ply is loaded.</p>'; return; }
   const gov = r.modes.reduce((a, m) => (m.R < a.R ? m : a)), R = gov.R, ok = R >= 1;
   const modeTxt = (m) => MODE_NAMES[m] || "combined stress";
-  const plyTxt = (x) => `Layer ${x.layer}, ${x.location.toLowerCase()} surface, at the ${x.region}`;
+  const plyTxt = (x) => `Layer ${x.layer}, ${x.location.toLowerCase()} surface, at the ${x.region}` + (p.contact === "line" && shape === "rect" ? ` (contact on ${x.case})` : "");
   const fpf = r.modes.find((m) => m.key === "fpf");
   const detail = (m) => ({
     fpf: () => `${plyTxt(m.ply)}: ${modeTxt(m.ply.mode)} by ${CRIT_NAMES[m.ply.criterion]}. Hoop force N₂ = ${fmt(m.ply.N2, 4)} N/m, hoop moment M₂ = ${fmt(m.ply.M2, 4)} N·m/m there.`,
@@ -1784,8 +1799,8 @@ function renderClamp(spec) {
   }[m.key]());
   const warn = [];
   if (r.has_core) warn.push("This layup has a core: the whole sandwich is taken as the tube wall. Crushing of the core under the clamp is not checked.");
-  if (plug && p.contact === "line") warn.push("With a concentrated contact the pressure is spread over the clamp face here; the real peak at the contact line is higher. Fit the clamp to the tube.");
-  if (!plug && fpf && fpf === gov && fpf.ply.region === "top face") warn.push("Even pressure bends the wide clamped face between the side walls, and that is what fails. A clamp face relieved in the middle, bearing only near the corners, puts the load straight into the side walls (try the concentrated contact), or a plug stops the face bending.");
+  if (plug && p.contact === "line") warn.push("Concentrated contact on a plugged tube: the line load is taken to spread at 45° through the wall, over about one wall thickness at mid-wall and two on the plug. This is a rough estimate; fit the clamp to the tube or use a liner.");
+  if (!plug && fpf && fpf === gov && fpf.ply.region === "top face" && p.contact === "even") warn.push("Even pressure bends the wide clamped face between the side walls, and that is what fails. A clamp face relieved in the middle, so it bears only near the corners, puts the load straight into the side walls; a plug stops the face bending.");
   out.innerHTML =
     (ok ? "" : `<div class="note bad">The tube fails at this preload: ${gov.name.toLowerCase()}. Keep the preload below ${fmt(F * R, 4)} N.</div>`) +
     warn.map((w) => `<div class="note warn">${w}</div>`).join("") +
@@ -1793,7 +1808,9 @@ function renderClamp(spec) {
       { name: "Safety factor", sym: "R", value: fmt(R, 4), tone: ok ? "good" : "bad", note: chip(ok ? "good" : "bad", ok ? "Holds" : "Fails") + " " + gov.name.toLowerCase() },
       { name: "Force to slide the clamp", sym: "F<sub>slide</sub>", value: fmt(r.slide, 4), unit: "N", note: `μ × total contact force ${fmt(r.normal, 4)} N` },
       { name: "Highest preload", sym: "F<sub>max</sub>", value: fmt(F * R, 4), unit: "N", note: `slide force there ${fmt(r.slide * R, 4)} N` },
-      r.squash !== null ? { name: "Tube squash", sym: "δ", value: fmt(r.squash * 1000, 3), unit: "mm", note: "closing between the clamped faces" }
+      r.squash !== null ? (r.squash < 0.5 * (shape === "round" ? p.d_in : p.height)
+        ? { name: "Tube squash", sym: "δ", value: fmt(r.squash * 1000, 3), unit: "mm", note: `closing between the clamped faces; ${fmt(r.squash * R * 1000, 3)} mm at F<sub>max</sub>` }
+        : { name: "Tube squash", sym: "δ", value: "—", tone: "bad", note: `far past failure, the tube would collapse; ${fmt(r.squash * R * 1000, 3)} mm at F<sub>max</sub>` })
         : { name: "Plug pressure", value: fmt(r.modes.find((m) => m.key === "plug").pressure / 1e6, 4), unit: "MPa" },
     ]) +
     (fpf ? "<h3>Critical ply</h3>" + secondary([{ name: "First-ply failure of the wall", value: plyTxt(fpf.ply), note: `${cap(modeTxt(fpf.ply.mode))} by ${CRIT_NAMES[fpf.ply.criterion]}, R = ${fmt(fpf.R, 4)}` }]) : "") +
@@ -1807,7 +1824,7 @@ function renderClamp(spec) {
     more("clamp-detail", "Detailed results: model and assumptions",
       `<p class="hint">${plug ? "With a plug, the wall cannot bend or buckle: it is squeezed between clamp and plug. The plug is taken to be stiff enough to carry the whole clamp load; a soft foam plug lets the wall bend, so check the hollow case too." :
         "The quarter cross-section is solved as a 2D ring frame with the wall's hoop stiffnesses A₂₂ and D₂₂ (per metre of tube), loaded by the clamp line load F/L on each face. Every point of the ring is checked for first-ply failure by maximum stress, Tsai-Wu and Hashin. The tube is taken as clamped uniformly along the contact length; the stiffening from the tube beyond the clamp ends is ignored, which is conservative."}` +
-      ` Even contact on a round tube is a pressure that falls off as the cosine of the angle from the top. Concentrated contact is a line load at the crown (round) or where the flat meets the corner (rectangular). ` +
+      ` Even contact on a round tube is a pressure that falls off as the cosine of the angle from the top. Concentrated contact is a line load at the crown (round). On a rectangular tube a rigid clamp touches first at the face centre if the face bulges out, or near the corners if it dishes in; both are solved and the worse is used. ` +
       `The slide force is μ times the contact force: it is the static friction limit with no other loads on the clamp, and preload scatter and creep of the composite under the clamp will reduce it in service.</p>`) +
     more("clamp-log", "Additional information: library output", logBlock(res.log));
 }
