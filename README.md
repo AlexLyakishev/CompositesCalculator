@@ -48,6 +48,16 @@ See `CompositesCalculatorExample.py` for a complete example:
 - compute stiffness with `calculate_A_B_D_matrix()`
 - print the layup with `layup_print()`
 
+## Web app
+`index.html` runs the library in the browser through Pyodide; serve the folder over HTTP (for example `py -m http.server`) and open the page. The front end has no build step:
+- `css/app.css`: design tokens (light and dark theme) and all styles
+- `py/bridge.py`: the Python layer between the page and `composites_calculator_lib.py`
+- `js/calc.js`: the few formulas that run in the page (beam cases, bolted-joint strength, load converter, screw preload)
+- `js/components.js`: shared result, matrix, table, tab and tooltip components
+- `js/layup.js`: layup definition, ply table and cross-section drawing
+- `js/modules/*.js`: one file per module (laminate, tube, failure, beam, bolt, clamp, materials)
+- `js/app.js`: start-up, navigation and recalculation
+
 ## Notes
 - The library assumes ply data uses GPa for elastic moduli and MPa for strengths.
 - For layup templates containing a core, use `zc<number>` tokens to add a core layer thickness in cm.
