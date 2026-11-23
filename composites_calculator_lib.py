@@ -1023,6 +1023,263 @@ def generate_torsion_arbitrary_tube(csv_path, lu: pd.DataFrame, torque, axial_lo
             "enclosed_area": A_m, "perimeter": S}
 
 
+# Vibration helpers, used by generate_natural_frequencies_tube()
+_BEAM_BOUNDARIES = ("clamped-free", "pinned-pinned", "clamped-clamped", "free-free", "clamped-pinned")
+
+
+def _beam_mode_roots(boundary, n_modes):
+    """
+    Private function, returns the first n_modes roots beta_n*L of the Euler-Bernoulli beam characteristic equation.
+    Each root is found by bisection in an interval that holds exactly one root (no scipy, so it runs in Pyodide).
+    The equations are divided through by cosh(x) so they stay well conditioned for high modes.
+
+        clamped-free     cos x cosh x = -1   ->  g(x) = cos x + 1/cosh x,           root n in [(n-1)pi, n pi]
+        clamped-clamped  cos x cosh x = +1   ->  g(x) = cos x - 1/cosh x,           root n in [n pi, (n+1)pi]
+        free-free        same roots as clamped-clamped (rigid-body modes at 0 excluded)
+        clamped-pinned   tan x = tanh x      ->  g(x) = sin x - cos x * tanh x,     root n in [n pi, n pi + pi/2]
+        pinned-pinned    sin x = 0           ->  x = n pi exactly
+    """
+    def bisect(g, lo, hi):
+        g_lo = g(lo)
+        for _ in range(200):
+            mid = 0.5 * (lo + hi)
+            g_mid = g(mid)
+            if g_lo * g_mid <= 0:
+                hi = mid
+            else:
+                lo, g_lo = mid, g_mid
+        return 0.5 * (lo + hi)
+
+    roots = []
+    for n in range(1, n_modes + 1):
+        if boundary == "pinned-pinned":
+            roots.append(n * np.pi)
+        elif boundary == "clamped-free":
+            roots.append(bisect(lambda x: np.cos(x) + 1 / np.cosh(x), (n - 1) * np.pi, n * np.pi))
+        elif boundary in ("clamped-clamped", "free-free"):
+            roots.append(bisect(lambda x: np.cos(x) - 1 / np.cosh(x), n * np.pi, (n + 1) * np.pi))
+        elif boundary == "clamped-pinned":
+            roots.append(bisect(lambda x: np.sin(x) - np.cos(x) * np.tanh(x), n * np.pi, n * np.pi + np.pi / 2))
+    return np.array(roots)
+
+
+def generate_natural_frequencies_tube(EI, lu: pd.DataFrame, length, inner_diameter=None, perimeter=None,
+                                      GJ=None, EA=None, boundary="clamped-free", n_modes=3):
+    """
+    Calculates the natural frequencies [Hz] of a composite tube treated as a uniform beam: bending modes
+    (Euler-Bernoulli), torsion modes and axial modes. Assumes the layup is symmetric.
+    calculate_A_B_D_matrix() must be run prior to calling this function.
+
+    Mass per unit length m [kg/m]:
+        circular tube (inner_diameter given)  m = sum_k rho_k * pi * ((Ri + t_k)^2 - (Ri + t_k-1)^2)    (exact)
+        any other tube (perimeter given)      m = (sum_k rho_k * thickness_k) * S                         (thin wall)
+    where S is the mid-wall perimeter, e.g. "perimeter" from generate_torsion_arbitrary_tube(), or
+    2*(in_width + in_height) + 4*h for a rectangular tube with inside dimensions in_width x in_height.
+
+    Bending (Euler-Bernoulli beam):
+        omega_n = (beta_n*L)^2 / L^2 * sqrt(EI / m),    f_n = omega_n / (2*pi)
+    with beta_n*L the roots of the characteristic equation for the supports:
+        "clamped-free"    (cantilever)   cos(bL)cosh(bL) = -1   1.8751, 4.6941, 7.8548, ...
+        "pinned-pinned"                  sin(bL) = 0             pi, 2pi, 3pi, ...
+        "clamped-clamped"                cos(bL)cosh(bL) = 1    4.7300, 7.8532, 10.9956, ...
+        "free-free"                      cos(bL)cosh(bL) = 1    same as clamped-clamped, rigid-body modes excluded
+        "clamped-pinned"                 tan(bL) = tanh(bL)     3.9266, 7.0686, 10.2102, ...
+
+    Torsion and axial (uniform shaft / bar, wave equation):
+        omega_n = lambda_n / L * sqrt(GJ / Ip)     and     omega_n = lambda_n / L * sqrt(EA / m)
+    with lambda_n = (2n-1)*pi/2 when one end is held and the other free ("clamped-free"), and n*pi when both ends
+    are held or both are free. For these modes a pinned end is taken to restrain twist and axial motion.
+    Ip is the polar mass moment of inertia per unit length, sum_k rho_k * pi/2 * ((Ri + t_k)^4 - (Ri + t_k-1)^4),
+    so torsion modes need inner_diameter. EA is taken from EI when EI is the dict from
+    generate_EIeq_arbitrary_tube(), and is calculated from the layup for a circular tube when not given.
+
+    Limits: no shear deformation or rotary inertia (results run high for short tubes, L/D below about 10, and for
+    higher modes), no damping, ideal supports, and no bending-torsion coupling from unbalanced layups (A16 != 0) or
+    unsymmetric sections (EI_23 != 0). Core layers made with zc in layup_create() have zero density, so a sandwich
+    wall's core mass is not included.
+
+    :param EI: bending stiffness [N*m^2], e.g. from generate_Dx_eq_circ_tube() or generate_EIeq_rect_tube(); or the
+               dict returned by generate_EIeq_arbitrary_tube(), in which case both principal axes are calculated
+    :param lu: layup dataframe, output of layup_create()
+    :param length: length of the tube between supports [m]
+    :param inner_diameter: inside diameter of a circular tube [m]. Give this or perimeter
+    :param perimeter: mid-wall perimeter of a non-circular tube [m]. Give this or inner_diameter
+    :param GJ: torsional stiffness [N*m^2], e.g. "GJ_eq" from generate_torsion_circ_tube(). Optional
+    :param EA: axial stiffness [N]. Optional
+    :param boundary: one of "clamped-free", "pinned-pinned", "clamped-clamped", "free-free", "clamped-pinned"
+    :param n_modes: number of modes to calculate for each type
+    :return: dict with
+        "f_bending": bending frequencies [Hz], from EI (or from EI_max for an arbitrary section)
+        "f_bending_min": bending frequencies about the EI_min axis [Hz] for an arbitrary section, else None
+        "f_torsion": torsion frequencies [Hz], or None
+        "f_axial": axial frequencies [Hz], or None
+        "beta_L": the beta_n*L roots used for bending
+        "mass_per_length": m [kg/m]
+        "polar_inertia_per_length": Ip [kg*m], or None
+    """
+    if boundary not in _BEAM_BOUNDARIES:
+        raise ValueError("boundary must be one of " + ", ".join(_BEAM_BOUNDARIES))
+    if (inner_diameter is None) == (perimeter is None):
+        raise ValueError("Give exactly one of inner_diameter (circular tube) or perimeter (any other tube)")
+    n_modes = int(n_modes)
+    if n_modes < 1:
+        raise ValueError("n_modes must be at least 1")
+    L = float(length)
+
+    EI_min = None
+    if isinstance(EI, dict):
+        if EA is None:
+            EA = EI["EA"]
+        EI_min = EI["EI_min"]
+        EI = EI["EI_max"]
+
+    h = lu["Thickness (m)"].sum()
+    rho = np.array([m.rho for m in lu["Material"]])
+    is_core = np.array([m.name == "Core" for m in lu["Material"]])
+
+    # Mass per unit length (and polar mass inertia for a circular tube)
+    Ip = None
+    if inner_diameter is not None:
+        Ri = inner_diameter / 2
+        # distance of each layer's outer and inner face from the inner surface; layer 1 is the outermost ply
+        r_out = Ri + lu["TopHeight"].to_numpy() + h / 2
+        r_in = Ri + lu["BottomHeight"].to_numpy() + h / 2
+        m = np.sum(rho * np.pi * (r_out ** 2 - r_in ** 2))
+        Ip = np.sum(rho * np.pi / 2 * (r_out ** 4 - r_in ** 4))
+        if EA is None:
+            q11 = np.array([Q[0, 0] for Q in lu["Q matrix off"]]) * 10 ** 9
+            EA = np.sum(np.where(is_core, 0.0, q11) * np.pi * (r_out ** 2 - r_in ** 2))
+        outer_size = inner_diameter + 2 * h
+    else:
+        m = np.sum(rho * lu["Thickness (m)"].to_numpy()) * perimeter
+        outer_size = perimeter / np.pi  # diameter of a circle with the same perimeter, for the slenderness check
+    if m <= 0:
+        raise ValueError("Mass per unit length is zero; check the material densities")
+
+    # Bending
+    beta_L = _beam_mode_roots(boundary, n_modes)
+    def bending(EI_value):
+        return [float(f) for f in beta_L ** 2 / L ** 2 * np.sqrt(EI_value / m) / (2 * np.pi)]
+    f_bending = bending(EI)
+    f_bending_min = bending(EI_min) if EI_min is not None else None
+
+    # Torsion and axial
+    n = np.arange(1, n_modes + 1)
+    lam = (2 * n - 1) * np.pi / 2 if boundary == "clamped-free" else n * np.pi
+    f_torsion = None
+    if GJ is not None:
+        if Ip is None:
+            raise ValueError("Torsion modes need inner_diameter (the polar mass inertia of the section)")
+        f_torsion = [float(f) for f in lam / L * np.sqrt(GJ / Ip) / (2 * np.pi)]
+    f_axial = [float(f) for f in lam / L * np.sqrt(EA / m) / (2 * np.pi)] if EA is not None else None
+
+    def fmt(freqs):
+        return ", ".join(str(round_sig(f, 4)) for f in freqs)
+    print("Mass per unit length [kg/m] is ", m)
+    print("Bending natural frequencies (" + boundary + ") [Hz]: " + fmt(f_bending))
+    if f_bending_min is not None:
+        print("Bending natural frequencies about EI_min axis [Hz]: " + fmt(f_bending_min))
+    if f_torsion is not None:
+        print("Torsion natural frequencies [Hz]: " + fmt(f_torsion))
+    if f_axial is not None:
+        print("Axial natural frequencies [Hz]: " + fmt(f_axial))
+    if L / outer_size < 10:
+        print("Warning: L/D is " + str(round_sig(L / outer_size, 3)) + "; below about 10, shear deformation and "
+              "rotary inertia lower the bending frequencies, so these results run high")
+    if is_core.any():
+        print("Warning: core layers have zero density, so the core's mass is not included")
+
+    return {"f_bending": f_bending, "f_bending_min": f_bending_min, "f_torsion": f_torsion, "f_axial": f_axial,
+            "beta_L": [float(b) for b in beta_L], "mass_per_length": float(m),
+            "polar_inertia_per_length": None if Ip is None else float(Ip)}
+
+
+def generate_natural_frequencies_plate(D_matrix, lu: pd.DataFrame, a, b, n_modes=5, B_matrix=None):
+    """
+    Calculates the natural frequencies [Hz] of a flat rectangular laminate a x b, simply supported on all four
+    edges, using classical laminated plate theory (Navier solution, Whitney & Leissa).
+    calculate_A_B_D_matrix() must be run prior to calling this function.
+
+    The equation of motion of a specially orthotropic plate (B = 0, D16 = D26 = 0) is
+
+        D11 w,xxxx + 2(D12 + 2 D66) w,xxyy + D22 w,yyyy + rho_A w,tt = 0
+
+    and the mode shape w = sin(m pi x / a) sin(n pi y / b) satisfies it and the simply supported edges exactly, so
+
+        omega_mn = pi^2 * sqrt( [D11 (m/a)^4 + 2(D12 + 2 D66)(m/a)^2 (n/b)^2 + D22 (n/b)^4] / rho_A ),
+        f_mn = omega_mn / (2 pi),     rho_A = sum_k rho_k * thickness_k   (mass per unit area)
+
+    m and n are the number of half-waves along x (length a, the 0 deg ply direction) and y (length b).
+    The modes are returned lowest first; the fundamental is usually m = n = 1.
+
+    The result is exact for symmetric cross-ply laminates. For other layups it is an estimate:
+      - D16, D26 != 0 (angle plies, e.g. +-45): bending-twisting coupling makes the real plate softer, so these
+        frequencies run high. The error grows with |D16|, |D26| and falls as the number of plies grows.
+        A warning is printed when either is more than 5% of sqrt(D11*D22).
+      - B != 0 (unsymmetric layup): bending-stretching coupling also lowers the frequencies. Pass B_matrix to
+        get a warning when it is not zero.
+    Other limits: thin plates only (no transverse shear deformation or rotary inertia, so results run high when
+    a/h or b/h is below about 20, and for sandwich plates with a soft core), no damping, ideal supports. Core
+    layers made with zc in layup_create() have zero density, so the core's mass is not included.
+
+    :param D_matrix: D_matrix [Nm], from calculate_A_B_D_matrix()
+    :param lu: layup dataframe, output of layup_create()
+    :param a: plate length along x, the laminate 0 deg direction [m]
+    :param b: plate width along y [m]
+    :param n_modes: number of modes to return
+    :param B_matrix: B_matrix [N], from calculate_A_B_D_matrix(). Optional, only used for the coupling warning
+    :return: dict with
+        "frequencies": the lowest n_modes natural frequencies [Hz], lowest first
+        "modes": the (m, n) half-wave numbers of each frequency
+        "areal_mass": rho_A [kg/m^2]
+        "D16_ratio", "D26_ratio": |D16| / sqrt(D11*D22) and |D26| / sqrt(D11*D22); near 0 means the result is exact
+    """
+    n_modes = int(n_modes)
+    if n_modes < 1:
+        raise ValueError("n_modes must be at least 1")
+    if a <= 0 or b <= 0:
+        raise ValueError("Plate dimensions a and b must be positive")
+
+    h = lu["Thickness (m)"].sum()
+    areal_mass = float(sum(row["Thickness (m)"] * row["Material"].rho for _, row in lu.iterrows()))
+    if areal_mass <= 0:
+        raise ValueError("Mass per unit area is zero; check the material densities")
+
+    D11, D22, D12, D66 = D_matrix[0][0], D_matrix[1][1], D_matrix[0][1], D_matrix[2][2]
+    D16, D26 = D_matrix[0][2], D_matrix[1][2]
+
+    # Frequency rises with both m and n, so the lowest n_modes modes all have m, n <= n_modes
+    mn = np.arange(1, n_modes + 1)
+    M, N = np.meshgrid(mn, mn, indexing="ij")
+    ka, kb = M / a, N / b
+    stiffness = D11 * ka ** 4 + 2 * (D12 + 2 * D66) * ka ** 2 * kb ** 2 + D22 * kb ** 4
+    f = np.pi ** 2 * np.sqrt(stiffness / areal_mass) / (2 * np.pi)
+    order = np.argsort(f, axis=None, kind="stable")[:n_modes]
+    frequencies = [float(x) for x in f.ravel()[order]]
+    modes = [(int(M.ravel()[i]), int(N.ravel()[i])) for i in order]
+
+    D_ref = np.sqrt(D11 * D22)
+    D16_ratio, D26_ratio = float(abs(D16) / D_ref), float(abs(D26) / D_ref)
+
+    print("Mass per unit area [kg/m^2] is ", areal_mass)
+    print("Natural frequencies, simply supported " + str(round_sig(a, 4)) + " x " + str(round_sig(b, 4)) + " m plate:")
+    for (m_hw, n_hw), freq in zip(modes, frequencies):
+        print("  mode (" + str(m_hw) + "," + str(n_hw) + "): " + str(round_sig(freq, 4)) + " Hz")
+    if max(D16_ratio, D26_ratio) > 0.05:
+        print("Warning: bending-twisting coupling is significant (|D16|/sqrt(D11*D22) = " + str(round_sig(D16_ratio, 3)) +
+              ", |D26|/sqrt(D11*D22) = " + str(round_sig(D26_ratio, 3)) + "); the real frequencies are lower than these")
+    if B_matrix is not None and np.max(np.abs(B_matrix)) > 1e-9 * max(np.max(np.abs(D_matrix)) / h, 1e-30):
+        print("Warning: B is not zero (unsymmetric layup); bending-stretching coupling makes the real frequencies lower")
+    if min(a, b) / h < 20:
+        print("Warning: the plate is thick (min(a, b)/h = " + str(round_sig(min(a, b) / h, 3)) + "); without shear "
+              "deformation these results run high")
+    if any(m.name == "Core" for m in lu["Material"]):
+        print("Warning: core layers have zero density and the core's shear flexibility is ignored; results run high")
+
+    return {"frequencies": frequencies, "modes": modes, "areal_mass": areal_mass,
+            "D16_ratio": D16_ratio, "D26_ratio": D26_ratio}
+
+
 # Failure criteria helpers, used by calculate_safety_factors()
 def _strain_off_to_on(ply_angle, strain_off_axis):
     """

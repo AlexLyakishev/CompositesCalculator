@@ -471,8 +471,54 @@ def _clamp(p):
     return out
 
 
+def _vib_tube(p):
+    """
+    Natural frequencies of the current tube as a beam. Circular: one bending set (same about every axis), torsion
+    and axial. Rectangular: bending about both axes and axial (EA = A11 * mid-wall perimeter, thin wall).
+    Arbitrary: bending about both principal axes and axial. Torsion needs the polar mass inertia, so circular only.
+    """
+    lu = _build(p["layup"])
+    A, B, D = cc.calculate_A_B_D_matrix(lu)
+    s, L, bc, n = p["section"], p["length"], p["boundary"], p["n_modes"]
+    h = lu["Thickness (m)"].sum()
+    out = {"bending": []}
+    if s["type"] == "circ":
+        EI = cc.generate_Dx_eq_circ_tube(A, D, s["d_in"], lu)
+        GJ = cc.generate_torsion_circ_tube(A, s["d_in"], lu, 1.0)["GJ_eq"]
+        r = cc.generate_natural_frequencies_tube(EI, lu, L, inner_diameter=s["d_in"], GJ=GJ, boundary=bc, n_modes=n)
+        out["bending"].append({"label": "Bending", "EI": EI, "f": r["f_bending"]})
+        out["outer_size"] = s["d_in"] + 2 * h
+    elif s["type"] == "rect":
+        S = 2 * (s["width"] + s["height"]) + 4 * h
+        EI_w = cc.generate_EIeq_rect_tube(A, D, s["height"], s["width"], lu)
+        EI_h = cc.generate_EIeq_rect_tube(A, D, s["width"], s["height"], lu)
+        r = cc.generate_natural_frequencies_tube(EI_w, lu, L, perimeter=S, EA=A[0, 0] * 1e9 * S, boundary=bc, n_modes=n)
+        r_h = cc.generate_natural_frequencies_tube(EI_h, lu, L, perimeter=S, boundary=bc, n_modes=n)
+        out["bending"] += [{"label": "Bending about the width axis", "EI": EI_w, "f": r["f_bending"]},
+                           {"label": "Bending about the height axis", "EI": EI_h, "f": r_h["f_bending"]}]
+        out["outer_size"] = max(s["width"], s["height"]) + 2 * h
+    else:
+        sec = cc.generate_EIeq_arbitrary_tube(_section_csv(s), lu, s["surface"])
+        S = cc.generate_torsion_arbitrary_tube(_section_csv(s), lu, 1.0, 0.0, s["surface"])["perimeter"]
+        r = cc.generate_natural_frequencies_tube(sec, lu, L, perimeter=S, boundary=bc, n_modes=n)
+        out["bending"] += [{"label": "Bending, stiffest axis (EI max)", "EI": sec["EI_max"], "f": r["f_bending"]},
+                           {"label": "Bending, softest axis (EI min)", "EI": sec["EI_min"], "f": r["f_bending_min"]}]
+        out["outer_size"] = S / np.pi
+    out.update(torsion=r["f_torsion"], axial=r["f_axial"], beta_L=r["beta_L"], mass_per_length=r["mass_per_length"])
+    return out
+
+
+def _vib_plate(p):
+    lu = _build(p["layup"])
+    A, B, D = cc.calculate_A_B_D_matrix(lu)
+    out = cc.generate_natural_frequencies_plate(D, lu, p["a"], p["b"], p["n_modes"], B)
+    out["h"] = lu["Thickness (m)"].sum()
+    return out
+
+
 _API = {"materials": _materials, "layers": _layers, "outline": _outline, "laminate": _laminate, "bending": _bending,
-        "torsion": _torsion, "failure": _failure, "wall_bending": _wall_bending, "bolt": _bolt, "clamp": _clamp}
+        "torsion": _torsion, "failure": _failure, "wall_bending": _wall_bending, "bolt": _bolt, "clamp": _clamp,
+        "vib_tube": _vib_tube, "vib_plate": _vib_plate}
 
 
 def api(name, payload):

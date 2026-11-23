@@ -8,30 +8,44 @@ function boltFactor(sel, customId) {
   $(customId + "Wrap").hidden = !custom;
   return custom ? numVal(customId) : parseFloat($(sel).value);
 }
-function boltSVG(d, e, w, ang, P) {
-  const s = Math.min(150 / w, 330 / (e + 1.5 * w)), x0 = 52, top = 40, bot = top + w * s, yc = (top + bot) / 2;
-  const xr = x0 + 24 + (e + 1.5 * w) * s, xc = xr - e * s, r = Math.max((d / 2) * s, 3);
-  const zig = [0, 1, 2, 3, 4, 5, 6].map((i) => `${x0 + (i % 2 ? 6 : 0)},${top + ((bot - top) * i) / 6}`).join(" ");
-  const ink = "var(--ink)", mu = "var(--muted)";
-  const fa = (ang * Math.PI) / 180, fx = 64, fy = bot + 64, fl = 24;
-  const la = Math.max(r + 40, 54);
-  return `<span class="vp-cap">Plan view</span><svg viewBox="0 0 520 ${bot + 96}" role="img" aria-label="Laminate strip with a loaded bolt hole, edge distance and width dimensioned">` +
-    `<path d="M${x0},${top} L${xr},${top} L${xr},${bot} L${x0},${bot}" fill="var(--ply)" stroke="${ink}" stroke-width="1.4"/>` +
-    `<polyline points="${zig}" fill="none" stroke="${ink}" stroke-width="1" stroke-dasharray="3 2"/>` +
-    `<path d="M${xc - r - 10} ${yc}H${xc + r + 10}M${xc} ${yc - r - 10}V${yc + r + 10}" stroke="var(--faint)" stroke-width="0.8" stroke-dasharray="6 2 2 2"/>` +
-    `<circle cx="${xc}" cy="${yc}" r="${r}" fill="var(--surface)" stroke="${ink}" stroke-width="1.4"/>` +
-    `<path d="M${xc} ${yc - r - 2} A${r + 2} ${r + 2} 0 0 1 ${xc} ${yc + r + 2}" fill="none" stroke="var(--bad)" stroke-width="3.5" opacity="0.55"/>` +
-    `<circle cx="${xc}" cy="${yc}" r="${Math.max(r - 2, 1.5)}" fill="var(--muted)" opacity="0.3"/>` +
-    svgArrow(xc, yc, xc + la, yc, "var(--bad)", 2) +
-    `<text x="${xc + la + 4}" y="${yc - 6}" font-size="11.5" fill="var(--bad)" class="mtext">P${Number.isFinite(P) ? " = " + fmt(P) + " N" : ""}</text>` +
-    // edge distance e (hole centre to the free edge) and width w
-    svgExt(xc, yc + r + 2, xc, bot + 22) + svgExt(xr, bot, xr, bot + 22) + svgDim(xc, bot + 18, xr, bot + 18, `e = ${fmt(e)}`, { dy: 13 }) +
-    svgExt(x0 - 2, top, x0 - 22, top) + svgExt(x0 - 2, bot, x0 - 22, bot) + svgDim(x0 - 18, top, x0 - 18, bot, `w = ${fmt(w)}`, { dx: -9 }) +
-    `<line x1="${xc - r * 0.7}" y1="${yc - r * 0.7}" x2="${xc - r - 22}" y2="${top - 14}" stroke="${mu}" stroke-width="0.8"/>` +
-    `<text x="${xc - r - 24}" y="${top - 17}" font-size="10.5" fill="var(--ink-2)" text-anchor="end" class="mtext">Ø d = ${fmt(d)}</text>` +
-    `<line x1="${fx - fl * Math.cos(fa)}" y1="${fy - fl * Math.sin(fa)}" x2="${fx + fl * Math.cos(fa)}" y2="${fy + fl * Math.sin(fa)}" stroke="var(--fibre)" stroke-width="1.6"/>` +
-    `<text x="${fx + 36}" y="${fy + 4}" font-size="10.5" fill="${mu}">0° fibre direction (the 1 axis); load at θ = ${fmt(ang)}°, counter-clockwise from it · mm</text>` +
-    `<text x="${fx + 36}" y="${fy + 20}" font-size="10.5" fill="${mu}">Red arc: where the bolt bears on the hole wall</text></svg>`;
+// Plan view of the laminate with its 0° fibres (the 1 axis, or the tube axis) left to right and the free edge on the
+// right. The strip and its dimensions stay put; the load arrow and the red arc where the bolt bears on the hole wall
+// turn to the load angle θ, counter-clockwise from the 0° fibres. Used by the Bolted Joint module and Simple mode.
+// opts: {axis: label of the left-right axis, caption: what the load does in words}
+function boltSVG(d, e, w, ang, P, opts = {}) {
+  const ink = "var(--ink)", mu = "var(--muted)", bad = "var(--bad)", Wd = 520;
+  const s = Math.min(330 / (e + 1.5 * w), 150 / w);
+  const r = Math.max((d / 2) * s, 3), rb = r + 2, la = Math.max(r + 40, 54);
+  const xl = 40, hx = xl + 1.5 * w * s, xe = hx + e * s, yt = 72, yb = yt + w * s, hy = (yt + yb) / 2;
+  const zig = Array.from({ length: 7 }, (_, i) => `${xl + (i % 2 ? 6 : 0)},${(yt + ((yb - yt) * i) / 6).toFixed(1)}`);
+  const outline = `M${xl},${yt} L${xe},${yt} L${xe},${yb} L${zig.slice().reverse().join(" L")} Z`;
+  // load direction on screen (y down); the bolt bears on the half of the hole it is pulled towards
+  const th = ((Number.isFinite(ang) ? ang : 0) * Math.PI) / 180, c = Math.cos(th), sn = Math.sin(th);
+  const at = (rad, phi) => [hx + rad * Math.cos(phi), hy - rad * Math.sin(phi)].map((v) => v.toFixed(1)).join(" ");
+  const ax = hx + la * c, ay = hy - la * sn;
+  const arc = `M${at(rb, th + Math.PI / 2)} A${rb} ${rb} 0 0 1 ${at(rb, th - Math.PI / 2)}`;
+  // load label just beyond the arrow head; a load pulling to the right is labelled outside the free edge
+  const label = Number.isFinite(P) ? `P = ${fmt(P)} N` : "P";
+  const pLabel = c > 0.2 ? `<text x="${Math.max(xe, ax) + 10}" y="${ay + 4}" font-size="11.5" fill="${bad}" class="mtext">${label}</text>`
+    : c < -0.2 ? `<text x="${ax - 10}" y="${ay + (sn > 0 ? -8 : 14)}" font-size="11.5" fill="${bad}" text-anchor="end" class="mtext">${label}</text>`
+    : `<text x="${ax + 10}" y="${ay + (sn > 0 ? 10 : 0)}" font-size="11.5" fill="${bad}" class="mtext">${label}</text>`;
+  const dims = svgExt(hx, hy + rb, hx, yb + 22) + svgExt(xe, yb, xe, yb + 22) + svgDim(hx, yb + 18, xe, yb + 18, `e = ${fmt(e)}`, { dy: 13 }) +
+    svgExt(xl - 2, yt, xl - 22, yt) + svgExt(xl - 2, yb, xl - 22, yb) + svgDim(xl - 18, yt, xl - 18, yb, `w = ${fmt(w)}`, { dx: -9 });
+  // diameter call-out up and to the left, or up and to the right when the load arrow points that way
+  const k = c < -0.2 && sn > 0.2 ? 1 : -1;
+  const dLabel = `<line x1="${hx + k * r * 0.7}" y1="${hy - r * 0.7}" x2="${hx + k * (r + 26)}" y2="${yt - 12}" stroke="${mu}" stroke-width="0.8"/>` +
+    `<text x="${hx + k * (r + 28)}" y="${yt - 15}" font-size="10.5" fill="var(--ink-2)" text-anchor="${k > 0 ? "start" : "end"}" class="mtext">Ø d = ${fmt(d)}</text>`;
+  const ya = yb + 56, H = ya + 34;
+  const axis = opts.axis || "0° fibres (the 1 axis)";
+  const caption = opts.caption || `Load at θ = ${fmt(Number.isFinite(ang) ? ang : 0)}° from the 0° fibres, counter-clockwise`;
+  return `<span class="vp-cap">Plan view</span><svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Laminate strip with a loaded bolt hole, edge distance and width dimensioned; ${esc(caption)}">` +
+    `<path d="${outline}" fill="var(--ply)" stroke="${ink}" stroke-width="1.4" stroke-linejoin="round"/>` +
+    `<circle cx="${hx}" cy="${hy}" r="${r}" fill="var(--surface)" stroke="${ink}" stroke-width="1.4"/>` +
+    `<path d="${arc}" fill="none" stroke="${bad}" stroke-width="3.5" opacity="0.55"/>` +
+    `<circle cx="${hx}" cy="${hy}" r="${Math.max(r - 2, 1.5)}" fill="var(--muted)" opacity="0.3"/>` +
+    svgArrow(hx, hy, ax, ay, bad, 2) + pLabel + dims + dLabel +
+    svgArrow(70, ya, 24, ya, mu, 1) + svgArrow(70, ya, 116, ya, mu, 1) + `<text x="124" y="${ya + 4}" font-size="10.5" fill="${mu}">${axis}</text>` +
+    `<text x="24" y="${ya + 24}" font-size="10.5" fill="${mu}">${caption} · red arc: where the bolt bears · mm</text></svg>`;
 }
 function renderBolt(spec) {
   const d = numVal("bD"), e = numVal("bE"), w = numVal("bWd"), P = numVal("bLoad"), ang = numVal("bAng");

@@ -363,6 +363,7 @@ function applyPreset(id) {
     note.textContent = `This preset needs the material “${p.material}”, which is not in the material database.`;
     return;
   }
+  $("preset").value = p.id;  // also when chosen from Simple mode
   $("baseMat").value = p.material;
   $("seq").value = p.seq;
   setMode(p.mode);

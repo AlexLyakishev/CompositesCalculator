@@ -24,6 +24,10 @@
   <div class="appid"><span class="logo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg></span><b>Composites Calculator</b></div>
   <div class="crumb"><span class="sep">/</span><span id="modTitle">Laminate</span></div>
   <div class="tb-spacer"></div>
+  <div class="seg modeseg" id="uiMode" role="group" aria-label="Interface mode">
+    <button type="button" data-ui="simple" aria-pressed="true" title="Load a part, apply a load and see whether it holds">Simple</button>
+    <button type="button" data-ui="full" aria-pressed="false" title="Every module: layup editor, failure analysis, beams, joints, clamps and materials">Full</button>
+  </div>
   <span id="status" role="status">Loading Python runtime…</span>
   <div class="tb-div" id="statusDiv"></div>
   <button id="themeBtn" class="btn ghost icon" type="button" title="Switch light / dark theme" aria-label="Switch theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17Z" fill="currentColor"/></svg></button>
@@ -40,6 +44,7 @@
     <button data-tab="beam" title="Beam" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10h20"/><path d="m5 10-3 6h6l-3-6Z"/><path d="m19 10-3 6h6l-3-6Z"/><path d="M12 2v6"/><path d="m9.5 5.5 2.5 2.5 2.5-2.5"/></svg><span class="lbl">Beam</span><i class="nd none" data-nd="beam"></i></button>
     <button data-tab="bolt" title="Bolted Joint" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="1.5"/><circle cx="13" cy="12" r="3"/><path d="M16 12h4"/><path d="m18.5 10.5 1.5 1.5-1.5 1.5"/></svg><span class="lbl">Bolted Joint</span><i class="nd none" data-nd="bolt"></i></button>
     <button data-tab="clamp" title="Tube Clamp" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M3 11h4a5 5 0 0 1 10 0h4"/><path d="M3 13h4a5 5 0 0 0 10 0h4"/></svg><span class="lbl">Tube Clamp</span><i class="nd none" data-nd="clamp"></i></button>
+    <button data-tab="vibration" title="Vibration" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12c1.7-6 3.3-6 5 0s3.3 6 5 0 3.3-6 5 0 3.3 6 5 0"/></svg><span class="lbl">Vibration</span><i class="nd none" data-nd="vibration"></i></button>
     <div class="nav-h">Data</div>
     <button data-tab="materials" title="Materials" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span class="lbl">Materials</span></button>
     <button data-tab="upcoming" title="Roadmap" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="lbl">Roadmap</span></button>
@@ -83,6 +88,126 @@
     </div>
     <div id="layupMsgs" class="msgs"></div>
   </section>
+
+  <!-- ============ SIMPLE MODE ============ -->
+  <div class="module" id="tab-simple" hidden>
+    <section class="panel">
+      <header class="ph"><span class="step">1</span><h2>Part</h2><span class="meta">a composite tube used as a beam</span></header>
+      <div class="split-pb">
+        <div>
+          <div class="pg"><h3>Choose a part</h3>
+            <div class="prm wide"><label for="sPreset">Part</label><div class="fld"><select id="sPreset" disabled><option value="">Custom (set up in Full mode)</option></select></div></div>
+          </div>
+          <div id="sPart"></div>
+          <details class="xp boxed" data-key="simple-part-note"><summary>About this part</summary><div class="xpb"><p class="hint" id="sPartNote" style="margin:0"></p></div></details>
+        </div>
+        <div><div class="vp" id="sSection"><p class="hint c">Waiting for Python…</p></div></div>
+      </div>
+    </section>
+    <section class="panel">
+      <header class="ph"><span class="step">2</span><h2>Load case</h2>
+        <div class="seg" id="sCase" role="group" aria-label="Load case">
+          <button type="button" data-case="beam" aria-pressed="true" title="The tube as a beam: bending, with optional twisting and pulling"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10h20"/><path d="m5 10-3 6h6l-3-6Z"/><path d="m19 10-3 6h6l-3-6Z"/><path d="M12 2v6"/><path d="m9.5 5.5 2.5 2.5 2.5-2.5"/></svg>Beam</button>
+          <button type="button" data-case="clamp" aria-pressed="false" title="Two clamp halves screwed together around the tube"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M3 11h4a5 5 0 0 1 10 0h4"/><path d="M3 13h4a5 5 0 0 0 10 0h4"/></svg>Clamp</button>
+          <button type="button" data-case="bolt" aria-pressed="false" title="A bolt or pin through a drilled hole in the tube wall"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="1.5"/><circle cx="13" cy="12" r="3"/><path d="M16 12h4"/><path d="m18.5 10.5 1.5 1.5-1.5 1.5"/></svg>Bolt</button>
+        </div>
+        <span class="meta" id="sCaseMeta">loads in N, lengths in mm</span></header>
+      <div class="split-pb">
+        <div>
+        <div id="sc-beam">
+          <div class="pg"><h3>Supports</h3>
+            <div class="prm wide"><label for="sSupport">Held</label><div class="fld"><select id="sSupport" class="slive">
+              <option value="cant">Fixed at one end (cantilever)</option>
+              <option value="ss">Resting on a support at each end</option>
+              <option value="ff">Clamped at both ends</option>
+            </select></div></div>
+            <div class="prm"><label for="sL">Length <var>L</var></label><div class="fld"><input type="number" id="sL" class="slive" value="1000" min="0" step="any"><span class="u">mm</span></div></div>
+          </div>
+          <div class="pg"><h3>Bending load</h3>
+            <div class="prm wide"><label for="sLoadType">Applied as</label><div class="fld"><select id="sLoadType" class="slive">
+              <option value="point">One point load</option>
+              <option value="udl">Spread evenly along the length</option>
+            </select></div></div>
+            <div class="prm"><label for="sF"><span id="sFLabel">Load at the free end</span> <var>P</var></label><div class="fld"><input type="number" id="sF" class="slive" value="100" step="any"><span class="u">N</span></div></div>
+            <div class="prm" id="sAWrap"><label for="sA"><span id="sALabel">Position from the fixed end</span> <var>a</var></label><div class="fld"><input type="number" id="sA" class="slive" placeholder="free end" min="0" step="any"><span class="u">mm</span></div></div>
+            <div class="prm wide" id="sDirWrap" hidden><label for="sDir">Direction</label><div class="fld"><select id="sDir" class="slive"></select></div></div>
+          </div>
+          <div class="pg"><h3>Also acting <span class="h3u">optional</span></h3>
+            <div class="prm"><label for="sT">Twisting torque <var>T</var></label><div class="fld"><input type="number" id="sT" class="slive" value="0" step="any"><span class="u">N·m</span></div></div>
+            <div class="prm"><label for="sP">Axial force <var>F</var> <span class="q">pull +, push −</span></label><div class="fld"><input type="number" id="sP" class="slive" value="0" step="any"><span class="u">N</span></div></div>
+          </div>
+        </div>
+        <div id="sc-clamp" hidden>
+          <div class="pg"><h3>Clamp</h3>
+            <div class="prm wide" id="sCFacesWrap" hidden><label for="sCFaces">Clamped on</label><div class="fld"><select id="sCFaces" class="slive">
+              <option value="wide">The wide faces</option>
+              <option value="narrow">The narrow faces</option>
+            </select></div></div>
+            <div class="prm"><label for="sCF">Total screw preload <var>F</var> <i class="tip" tabindex="0" data-tip="The sum of all screw preloads. From the tightening torque, each screw gives about T / (0.2 d), e.g. 2 N·m on an M4 screw ≈ 2500 N."></i></label><div class="fld"><input type="number" id="sCF" class="slive" value="2000" min="0" step="any"><span class="u">N</span></div></div>
+            <div class="prm"><label for="sCL">Clamp length along the tube <var>L</var></label><div class="fld"><input type="number" id="sCL" class="slive" value="30" min="0" step="any"><span class="u">mm</span></div></div>
+            <div class="prm wide"><label for="sCFit">Fit on the tube</label><div class="fld"><select id="sCFit" class="slive">
+              <option value="even">Machined to fit, or with a rubber liner</option>
+              <option value="line">Rigid, not matched to the tube (worst case)</option>
+            </select></div></div>
+            <div class="prm wide"><label for="sCMu">Grip surface</label><div class="fld"><select id="sCMu" class="slive">
+              <option value="0.15">Smooth and dry (μ ≈ 0.15)</option>
+              <option value="0.3" selected>Textured or peel-ply tube (μ ≈ 0.3)</option>
+              <option value="0.45">Friction paste or rubber liner (μ ≈ 0.45)</option>
+            </select></div></div>
+            <div class="prm wide"><label for="sCPlug">Inside the tube</label><div class="fld"><select id="sCPlug" class="slive">
+              <option value="0">Nothing, hollow</option>
+              <option value="1">A plug bonded in under the clamp</option>
+            </select></div></div>
+            <div class="prm" id="sCPlugWrap" hidden><label for="sCPlugS">Plug crushing strength <i class="tip" tabindex="0" data-tip="About 2–5 MPa for PVC foam, 10–15 MPa for end-grain balsa, 15–35 MPa for a printed nylon insert, 30 MPa for plywood on edge."></i></label><div class="fld"><input type="number" id="sCPlugS" class="slive" value="20" min="0" step="any"><span class="u">MPa</span></div></div>
+          </div>
+          <div class="pg"><h3>Load on the clamp <span class="h3u">optional</span></h3>
+            <div class="prm"><label for="sCS">Force pulling the clamp along the tube</label><div class="fld"><input type="number" id="sCS" class="slive" value="0" min="0" step="any"><span class="u">N</span></div></div>
+          </div>
+        </div>
+        <div id="sc-bolt" hidden>
+          <div class="pg"><h3>Hole</h3>
+            <div class="prm"><label for="sBD">Bolt or pin diameter <var>d</var></label><div class="fld"><input type="number" id="sBD" class="slive" value="5" min="0" step="any"><span class="u">mm</span></div></div>
+            <div class="prm"><label for="sBE"><span id="sBELabel">Hole centre to the end of the tube</span> <var>e</var> <i class="tip" tabindex="0" data-tip="Distance from the hole centre to the free edge the load pulls towards. Aim for at least 3 d."></i></label><div class="fld"><input type="number" id="sBE" class="slive" value="15" min="0" step="any"><span class="u">mm</span></div></div>
+            <div class="prm"><label for="sBW"><span id="sBWLabel">Wall width beside the hole</span> <var>w</var> <i class="tip" tabindex="0" data-tip="Width of wall across the load: the flat face the hole is in, or the spacing between bolts in a row. Aim for at least 4 d."></i></label><div class="fld"><input type="number" id="sBW" class="slive" value="25" min="0" step="any"><span class="u">mm</span></div></div>
+            <div class="prm wide"><label for="sBFit">Hole</label><div class="fld"><select id="sBFit" class="slive">
+              <option value="1.00">Reamed, tight fit</option>
+              <option value="0.95">Close fit (5.1 mm hole for 5 mm)</option>
+              <option value="0.85" selected>Normal clearance (5.3 mm for M5)</option>
+              <option value="0.75">Loose (5.5 mm for M5), or worn</option>
+            </select></div></div>
+            <div class="prm wide"><label for="sBThr">Bears on the hole</label><div class="fld"><select id="sBThr" class="slive">
+              <option value="1.00">Smooth pin or bolt shank</option>
+              <option value="0.75">Bolt threads</option>
+            </select></div></div>
+            <div class="prm wide"><label for="sBCl">Tightened</label><div class="fld"><select id="sBCl" class="slive">
+              <option value="1.00">Not clamped: pin or loose nut</option>
+              <option value="1.15">Nut finger-tight, with washers</option>
+              <option value="1.35">Bolt torqued, with washers</option>
+            </select></div></div>
+          </div>
+          <div class="pg"><h3>Load</h3>
+            <div class="prm"><label for="sBP">Load on the bolt <var>P</var></label><div class="fld"><input type="number" id="sBP" class="slive" value="1000" min="0" step="any"><span class="u">N</span></div></div>
+            <div class="prm wide"><label for="sBAng">Pulling</label><div class="fld"><select id="sBAng" class="slive">
+              <option value="0">Along the tube, towards its end</option>
+              <option value="90">Around the tube</option>
+              <option value="custom">At an angle…</option>
+            </select></div></div>
+            <div class="prm" id="sBAngCWrap" hidden><label for="sBAngC">Angle from the tube axis <var>θ</var> <i class="tip" tabindex="0" data-tip="Counter-clockwise from the tube axis, seen from outside: 0° pulls along the tube towards its end, 90° around it."></i></label><div class="fld"><input type="number" id="sBAngC" class="slive" value="45" step="any"><span class="u">°</span></div></div>
+            <div class="prm wide"><label for="sBWalls">Bolt passes through</label><div class="fld"><select id="sBWalls" class="slive">
+              <option value="1">One wall</option>
+              <option value="2">Both walls, sharing the load</option>
+            </select></div></div>
+          </div>
+        </div>
+        </div>
+        <div><div class="vp" id="sDiagram"></div></div>
+      </div>
+    </section>
+    <section class="panel" id="sPlotPanel">
+      <header class="ph"><span class="step">3</span><h2>Deflected shape</h2><span class="meta">bending deflection along the length</span></header>
+      <div class="pb"><div class="vp" id="sPlot"></div></div>
+    </section>
+  </div>
 
   <!-- ============ LAMINATE ============ -->
   <div class="module" id="tab-laminate">
@@ -443,6 +568,44 @@
     </section>
   </div>
 
+  <!-- ============ VIBRATION ============ -->
+  <div class="module" id="tab-vibration" hidden>
+    <section class="panel">
+      <header class="ph"><h2>Tube natural frequencies</h2><span class="meta">tube as a uniform beam</span></header>
+      <div class="split-pb">
+        <div>
+          <div class="pg"><h3>Tube</h3>
+            <div class="msg info" id="vTubeNote" style="margin-bottom:6px"></div>
+            <div class="prm"><label for="vL">Length <var>L</var></label><div class="fld"><input type="number" id="vL" class="live" value="1000" min="0" step="any"><span class="u">mm</span></div></div>
+            <div class="prm wide"><label for="vBC">Supports</label><div class="fld"><select id="vBC" class="live">
+              <option value="clamped-free">Clamped – free (cantilever)</option>
+              <option value="pinned-pinned">Pinned – pinned</option>
+              <option value="clamped-clamped">Clamped – clamped</option>
+              <option value="clamped-pinned">Clamped – pinned</option>
+              <option value="free-free">Free – free</option>
+            </select></div></div>
+            <div class="prm"><label for="vN">Modes <span class="q">1–6</span></label><div class="fld"><input type="number" id="vN" class="live" value="3" min="1" max="6" step="1"></div></div>
+          </div>
+        </div>
+        <div><div class="vp" id="vTubeViz"></div></div>
+      </div>
+    </section>
+    <section class="panel">
+      <header class="ph"><h2>Plate natural frequencies</h2><span class="meta">flat laminate, all edges simply supported</span></header>
+      <div class="split-pb">
+        <div>
+          <div class="pg"><h3>Plate <i class="tip" tabindex="0" data-tip="A flat rectangular plate made from the current layup. a runs along the 0° ply direction."></i></h3>
+            <div class="prm"><label for="vA">Length <var>a</var> <span class="q">along 0°</span></label><div class="fld"><input type="number" id="vA" class="live" value="300" min="0" step="any"><span class="u">mm</span></div></div>
+            <div class="prm"><label for="vB">Width <var>b</var></label><div class="fld"><input type="number" id="vB" class="live" value="200" min="0" step="any"><span class="u">mm</span></div></div>
+            <div class="prm"><label for="vPN">Modes <span class="q">1–12</span></label><div class="fld"><input type="number" id="vPN" class="live" value="6" min="1" max="12" step="1"></div></div>
+          </div>
+        </div>
+        <div><div class="vp" id="vPlateViz"></div></div>
+      </div>
+    </section>
+    <section class="panel" id="vibDetail"></section>
+  </div>
+
   <!-- ============ ROADMAP ============ -->
   <div class="module" id="tab-upcoming" hidden>
     <section class="panel">
@@ -459,12 +622,14 @@
 
 <!-- ================= RESULTS INSPECTOR ================= -->
 <aside class="inspector" id="inspector" aria-label="Results">
+  <section class="insp" data-mod="simple" hidden><header><h2>Result</h2></header><div id="iSimple"><p class="ih-empty">Waiting for Python…</p></div></section>
   <section class="insp" data-mod="laminate"><header><h2>Laminate properties</h2></header><div id="iLam"><p class="ih-empty">Waiting for Python…</p></div></section>
   <section class="insp" data-mod="tube" hidden><header><h2>Tube results</h2></header><div id="iTube"></div></section>
   <section class="insp" data-mod="failure" hidden><header><h2>Failure results</h2></header><div id="iFail"></div></section>
   <section class="insp" data-mod="beam" hidden><header><h2>Beam results</h2></header><div id="iBeam"></div></section>
   <section class="insp" data-mod="bolt" hidden><header><h2>Joint results</h2></header><div id="iBolt"></div></section>
   <section class="insp" data-mod="clamp" hidden><header><h2>Clamp results</h2></header><div id="iClamp"></div></section>
+  <section class="insp" data-mod="vibration" hidden><header><h2>Vibration results</h2></header><div id="iVib"></div></section>
   <section class="insp" data-mod="materials" hidden><header><h2>Material properties</h2></header><div id="iMat"><p class="ih-empty">Select a material in the table.</p></div></section>
 </aside>
 
@@ -488,7 +653,9 @@
 <script src="js/modules/beam.js"></script>
 <script src="js/modules/bolt.js"></script>
 <script src="js/modules/clamp.js"></script>
+<script src="js/modules/vibration.js"></script>
 <script src="js/modules/materials.js"></script>
+<script src="js/modules/simple.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
