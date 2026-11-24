@@ -18,7 +18,7 @@ const unitName = () => ({ "0.001": "mm", "1": "m", "0.0254": "in" }[$("unit").va
 async function boot() {
   const status = $("status");
   try {
-    const resp = await Promise.all(Object.values(FILES).map((f) => fetch(f)));
+    const resp = await Promise.all(Object.values(FILES).map((f) => fetch(f, { cache: "no-cache" })));
     resp.forEach((r, i) => { if (!r.ok) throw new Error(`Could not load ${Object.values(FILES)[i]} (${r.status}).`); });
     const [lib, shape, db, bridge, shapeBridge] = await Promise.all(resp.map((r) => r.text()));
     pyodide = await loadPyodide();

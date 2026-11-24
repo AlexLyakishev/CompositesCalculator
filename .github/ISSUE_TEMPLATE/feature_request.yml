@@ -1,0 +1,35 @@
+name: Suggest a feature
+description: A new calculation, material, page, or an improvement to an existing one.
+title: "[Feature] "
+labels: ["feature"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Web calculator
+        - Shape Beam (beta)
+        - Python library
+        - Materials database
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: need
+    attributes:
+      label: What you want to do
+      description: The problem or design task, not only the solution. For example, "size a tube for a given torsional stiffness".
+    validations:
+      required: true
+  - type: textarea
+    id: method
+    attributes:
+      label: Method or reference
+      description: The theory, standard, handbook or paper the calculation should follow, if you know it, and a worked example to check it against.
+  - type: textarea
+    id: other
+    attributes:
+      label: Anything else
+      description: Screenshots, sketches, or how you do this today.

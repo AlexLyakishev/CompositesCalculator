@@ -4,7 +4,8 @@
 async function boot() {
   const status = $("status");
   try {
-    const [libResp, dbResp, brResp] = await Promise.all([fetch(LIB_URL), fetch(DB_URL), fetch(BRIDGE_URL)]);
+    // no-cache: the browser checks with the server (cheap, uses ETags) so a new release never runs stale Python
+    const [libResp, dbResp, brResp] = await Promise.all([LIB_URL, DB_URL, BRIDGE_URL].map((u) => fetch(u, { cache: "no-cache" })));
     if (!libResp.ok) throw new Error(`Could not load ${LIB_URL} (${libResp.status}). It must sit next to this page.`);
     if (!dbResp.ok) throw new Error(`Could not load ${DB_URL} (${dbResp.status}). It must sit next to this page.`);
     if (!brResp.ok) throw new Error(`Could not load ${BRIDGE_URL} (${brResp.status}).`);

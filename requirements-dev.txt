@@ -1,0 +1,6 @@
+# Libraries the code needs, plus the test and lint tools. Install: py -m pip install -r requirements-dev.txt
+numpy
+pandas
+tabulate
+pytest
+ruff
