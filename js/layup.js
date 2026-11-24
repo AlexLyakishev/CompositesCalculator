@@ -345,12 +345,14 @@ const PRESETS = [
   {
     id: "dragonplate_braided_rect_2x1_050",
     name: "DragonPlate braided rectangular tube 2″ × 1″, 0.050″ wall",
-    material: "DragonPlate_TR30S_Epoxy_UD", seq: "+-45/0", mode: "so", overrides: {},
-    section: { type: "arb", surface: "inner", csv: roundedRectPoints(0.050292, 0.025146, 0.0035687) },
-    clamp: { width: 0.050292, height: 0.025146, radius: 0.0035687 },
-    note: "Estimated from DragonPlate's published data (SKU FDPBT-R*2x1x48T) and the wall thickness and weight measured on four tubes: ±45° braid / 0° uni / ±45° braid, 1.06 mm wall, " +
-      "inside 50.29 × 25.15 mm with 3.57 mm corner radius. The uni layer is assumed to be one third of the wall and the ply " +
-      "strengths are estimates, so treat the results as approximate. EI₂ is the tube bent flat, EI₃ on edge.",
+    // layer 5 is the 0° uni, thinner than the braid plies (the material's h0)
+    material: "DragonPlate_TR30S_Epoxy_UD", seq: "+-45/0", mode: "so", overrides: { 5: { thickness: 0.0000733 } },
+    section: { type: "arb", surface: "inner", csv: roundedRectPoints(0.050184, 0.025004, 0.0035687) },
+    clamp: { width: 0.050184, height: 0.025004, radius: 0.0035687 },
+    note: "Fitted to DragonPlate's published data (SKU FDPBT-R*2x1x48T) and to measurements on four tubes: ±45° braid / 0° uni / ±45° braid, " +
+      "1.06 mm wall, 52.31 × 27.13 mm outside, 3.57 mm inside corner radius. The uni layer (0.07 mm, about 7 % of the wall) is set so the " +
+      "flat bending stiffness matches a 3-point bend test (EI about 575 N·m²). Ply strengths are estimates, so treat strength results as " +
+      "approximate. EI₂ is the tube bent flat, EI₃ on edge.",
   },
 ];
 $("preset").insertAdjacentHTML("beforeend", PRESETS.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join(""));

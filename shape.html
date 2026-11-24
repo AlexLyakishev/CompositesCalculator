@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shape Beam · Composites Calculator</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23356AC3'/%3E%3Cg transform='translate(4 4)' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3 3 8l9 5 9-5-9-5Z'/%3E%3Cpath d='m3 12 9 5 9-5'/%3E%3Cpath d='m3 16 9 5 9-5'/%3E%3C/g%3E%3C/svg%3E">
+<meta name="description" content="Composite beam analysis of a slender 3D shape from an STL of its outer surface: sections cut along the span, laminate stiffness, beam finite elements and ply failure.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="css/app.css">
+<script>
+  try { const t = localStorage.getItem("composites_calculator_theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* default theme */ }
+</script>
+<style>
+  /* Shape Beam layout: inputs | 3D view and span plots | results */
+  .sapp { --inw: 360px; display: grid; height: 100vh; grid-template-rows: var(--tbh) minmax(0, 1fr) 24px;
+    grid-template-columns: var(--inw) minmax(0, 1fr) var(--ipw); grid-template-areas: "tb tb tb" "in ws ip" "st st st"; }
+  .inputs { grid-area: in; overflow-y: auto; background: var(--surface); border-right: 1px solid var(--line); padding: 10px 12px 20px; }
+  .sapp .workspace { gap: 10px; }
+  .view3d { position: relative; flex: 1 1 auto; min-height: 340px; background: var(--surface-3); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .view3d canvas { display: block; width: 100%; height: 100%; }
+  .vtools { position: absolute; top: 8px; left: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .vlegend { position: absolute; left: 8px; bottom: 8px; padding: 6px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); font-size: 11px; color: var(--ink-2); }
+  .vlegend .bar { width: 180px; height: 8px; border-radius: 2px; margin: 4px 0 2px; }
+  .vlegend .ticks { display: flex; justify-content: space-between; font: 10.5px var(--mono); color: var(--muted); }
+  .vhint { position: absolute; right: 8px; bottom: 8px; font-size: 11px; color: var(--faint); pointer-events: none; }
+  .plots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; flex: none; }
+  .plot { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px 4px; min-width: 0; }
+  .plot h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+  .plot svg { display: block; width: 100%; height: 130px; }
+  .rows { display: flex; flex-direction: column; gap: 6px; }
+  .row { border: 1px solid var(--line-soft); border-radius: var(--r); padding: 6px 6px 6px 8px; background: var(--surface-3); }
+  .row-h { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+  .row-h .btn { margin-left: auto; height: 22px; padding: 0 6px; }
+  .trio { display: grid; grid-template-columns: 52px repeat(3, minmax(0, 1fr)); gap: 4px; align-items: center; margin-top: 3px; }
+  .trio > span { font-size: 11.5px; color: var(--muted); }
+  .trio .fld { height: 24px; }
+  .trio .fld input { padding: 0 5px; font-size: 12px; }
+  .addrow { margin-top: 6px; }
+  .solve-note { font-size: 11.5px; color: var(--muted); }
+  @media (max-width: 1100px) {
+    .sapp { grid-template-columns: minmax(0, 1fr); grid-template-rows: var(--tbh) auto auto auto 24px; height: auto; min-height: 100vh;
+      grid-template-areas: "tb" "in" "ws" "ip" "st"; }
+    .inputs { border-right: 0; border-bottom: 1px solid var(--line); }
+    .sapp .workspace { overflow: visible; }
+    .view3d { height: 420px; flex: none; }
+    .plots { grid-template-columns: minmax(0, 1fr); }
+    .sapp .inspector { border-left: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<div class="sapp">
+
+<header class="toolbar">
+  <a class="appid" href="index.html" style="color:inherit;text-decoration:none" title="Back to the calculator"><span class="logo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg></span><b>Composites Calculator</b></a>
+  <div class="crumb"><span class="sep">/</span><span id="modTitle">Shape Beam</span><span class="tag">beta</span></div>
+  <div class="tb-spacer"></div>
+  <span id="status" role="status">Loading Python runtime…</span>
+  <div class="tb-div"></div>
+  <button id="themeBtn" class="btn ghost icon" type="button" title="Switch light / dark theme" aria-label="Switch theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17Z" fill="currentColor"/></svg></button>
+</header>
+
+<!-- ================= INPUTS ================= -->
+<aside class="inputs" aria-label="Inputs">
+  <div class="pg"><h3>Shape</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+      <button class="btn sm" type="button" data-ex="tube">Tapered tube</button>
+      <button class="btn sm" type="button" data-ex="wing">Wing</button>
+      <button class="btn sm" type="button" data-ex="arm">Rect. arm</button>
+      <span class="tdiv"></span>
+      <button class="btn sm" type="button" id="stlBtn">Open STL…</button><input type="file" id="stlFile" accept=".stl,model/stl,application/sla" hidden>
+    </div>
+    <div class="prm" style="margin-top:6px"><label for="unit">STL units</label><div class="fld"><select id="unit"><option value="0.001">millimetres</option><option value="1">metres</option><option value="0.0254">inches</option></select></div></div>
+    <div class="prm"><label for="axis">Span axis <i class="tip" tabindex="0" data-tip="The beam runs along this model axis. Sections are cut square to it. Picked automatically as the longest dimension of the model."></i></label><div class="fld"><select id="axis" class="live"><option>x</option><option>y</option><option>z</option></select></div></div>
+    <div class="prm"><label for="surface">Mesh is the <i class="tip" tabindex="0" data-tip="Outer surface: plies are built inward from the mesh, as in a female mould. Inner surface: built outward, as on a mandrel. Layer 1 lies on the meshed surface."></i></label><div class="fld"><select id="surface" class="live"><option value="outer">outer surface</option><option value="inner">inner surface</option></select></div></div>
+    <p class="hint" id="meshInfo">No model loaded.</p>
+  </div>
+
+  <div class="pg"><h3>Layup</h3>
+    <div class="prm wide"><label for="seq">Sequence <i class="tip" tabindex="0" data-tip="Same notation as the calculator, e.g. 0/45/-45/90/s. 0° plies run along the span. Layer 1 is on the meshed surface."></i></label><div class="fld"><input id="seq" class="live mono l" value="0/45/-45/0/s" spellcheck="false"></div></div>
+    <div class="prm wide"><label for="mat">Material</label><div class="fld"><select id="mat" class="live"></select></div></div>
+    <p class="hint" id="layupInfo"></p>
+  </div>
+
+  <div class="pg"><h3>Supports <span class="h3u">positions along the span</span></h3>
+    <div class="rows" id="supRows"></div>
+    <button class="btn sm addrow" type="button" id="addSup">+ Support</button>
+  </div>
+
+  <div class="pg"><h3>Point loads <span class="h3u">model coordinates</span></h3>
+    <div class="rows" id="plRows"></div>
+    <button class="btn sm addrow" type="button" id="addPl">+ Point load</button>
+  </div>
+
+  <div class="pg"><h3>Line loads <span class="h3u">spread along the span</span></h3>
+    <div class="rows" id="llRows"></div>
+    <button class="btn sm addrow" type="button" id="addLl">+ Line load</button>
+  </div>
+
+  <div class="pg"><h3>Self-weight</h3>
+    <div class="prm"><label for="grav">Gravity</label><div class="fld"><select id="grav" class="live"><option value="">off</option><option value="0,0,-1">−z</option><option value="0,-1,0">−y</option><option value="-1,0,0">−x</option><option value="0,0,1">+z</option><option value="0,1,0">+y</option></select></div></div>
+    <div class="prm"><label for="gfac">Load factor <span class="q">g’s</span></label><div class="fld"><input type="number" id="gfac" class="live" value="1" step="any"><span class="u">g</span></div></div>
+  </div>
+
+  <div class="pg"><h3>Model</h3>
+    <div class="prm"><label for="nel">Beam elements</label><div class="fld"><input type="number" id="nel" class="live" value="40" min="4" max="200" step="1"></div></div>
+    <div class="prm"><label for="npt">Check points per section</label><div class="fld"><input type="number" id="npt" class="live" value="64" min="16" max="256" step="1"></div></div>
+  </div>
+</aside>
+
+<!-- ================= WORKSPACE ================= -->
+<main class="workspace" id="workspace">
+  <div class="view3d" id="view3d">
+    <div class="vtools">
+      <div class="seg" id="viewMode" role="group" aria-label="Colour the surface by">
+        <button type="button" data-v="R" aria-pressed="true">Safety factor</button>
+        <button type="button" data-v="d" aria-pressed="false">Deflection</button>
+        <button type="button" data-v="m" aria-pressed="false">Model</button>
+      </div>
+      <label class="solve-note" style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="deform"> deformed ×<span id="deformScale" class="mono">—</span></label>
+      <button class="btn sm" type="button" id="fitBtn">Fit view</button>
+    </div>
+    <div class="vlegend" id="legend" hidden></div>
+    <div class="vhint"><span style="color:var(--ink-2)">– – reference axis</span> · <span style="color:var(--accent)">···· shear centre</span> · drag to orbit · right-drag to pan · scroll to zoom</div>
+  </div>
+  <div class="plots" id="plots"></div>
+</main>
+
+<!-- ================= RESULTS ================= -->
+<aside class="inspector" id="inspector" aria-label="Results">
+  <div class="insp"><header><h2>Results</h2><span class="tag" id="resTag">—</span></header>
+    <div id="results"><p class="ih-empty">Load a shape to start.</p></div>
+  </div>
+</aside>
+
+<footer class="statusbar"><span class="grow" id="foot">Shape Beam · sections cut along the span, laminate stiffness, 3D beam finite elements, ply failure</span><span class="mono" id="solveTime"></span></footer>
+</div>
+<div id="tipbox" class="tipbox" role="tooltip" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="js/util.js"></script>
+<script src="js/components.js"></script>
+<script src="js/shape.js"></script>
+</body>
+</html>
