@@ -24,6 +24,7 @@
   <div class="appid"><span class="logo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg></span><b>Composites Calculator</b></div>
   <div class="crumb"><span class="sep">/</span><span id="modTitle">Laminate</span></div>
   <div class="tb-spacer"></div>
+  <button id="fbBtn" class="btn ghost" type="button" title="Report a wrong result, an error or a missing feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M12 8.5v3"/><path d="M12 14v.01"/></svg><span class="fb-lbl">Feedback</span></button>
   <div class="seg modeseg" id="uiMode" role="group" aria-label="Interface mode">
     <button type="button" data-ui="simple" aria-pressed="true" title="Load a part, apply a load and see whether it holds">Simple</button>
     <button type="button" data-ui="full" aria-pressed="false" title="Every module: layup editor, failure analysis, beams, joints, clamps and materials">Full</button>
@@ -47,8 +48,10 @@
     <button data-tab="vibration" title="Vibration" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12c1.7-6 3.3-6 5 0s3.3 6 5 0 3.3-6 5 0 3.3 6 5 0"/></svg><span class="lbl">Vibration</span><i class="nd none" data-nd="vibration"></i></button>
     <div class="nav-h">Data</div>
     <button data-tab="materials" title="Materials" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span class="lbl">Materials</span></button>
-    <button data-tab="upcoming" title="Roadmap" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="lbl">Roadmap</span></button>
+    <div class="nav-h">Other</div>
     <button type="button" title="Shape Beam (beta): beam analysis of a 3D shape from an STL" onclick="location.href='shape.html'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 15c4-1 6-5 9-7s6-2 9-1"/><path d="M3 15c3 1 7 1 10-1s5-5 8-7"/></svg><span class="lbl">Shape Beam <span class="tag">beta</span></span></button>
+    <button data-tab="feedback" title="Feedback" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M12 8.5v3"/><path d="M12 14v.01"/></svg><span class="lbl">Feedback</span></button>
+    <button data-tab="upcoming" title="Roadmap" aria-current="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="lbl">Roadmap</span></button>
   </nav>
   <div class="sbfoot"><button id="sbToggle" type="button" aria-controls="sidebar" aria-expanded="true" title="Collapse sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/><path d="M19 5v14"/></svg><span class="lbl">Collapse</span></button></div>
 </aside>
@@ -613,9 +616,28 @@
       <header class="ph"><h2>Upcoming features</h2></header>
       <div class="pb">
         <ul class="road">
-          <li><b>Report an issue</b>A way to report bugs and request features straight from this page.</li>
           <li><b>Laminate and tube presets</b>Ready-made layups and sections for off-the-shelf parts, such as DragonPlate tubes, so common products can be loaded in one click.</li>
         </ul>
+      </div>
+    </section>
+  </div>
+  <div class="module" id="tab-feedback" hidden>
+    <section class="panel">
+      <header class="ph"><h2>Found something wrong? Please tell us</h2><div class="tools"><button class="btn sm" type="button" id="fbBack">← Back</button></div></header>
+      <div class="pb fb">
+        <p>This calculator is checked against hand calculations, but it is young and every module, Shape Beam (beta) most of all, will have cases it gets wrong. A result that looks off, an error message, a layout that breaks or a feature you need: please report it. Reports with a screenshot are the quickest to fix.</p>
+        <div class="fb-actions">
+          <a class="btn primary" id="fbReport" href="https://github.com/AlexLyakishev/CompositesCalculator/issues/new?template=bug_report.yml" target="_blank" rel="noopener">Report a problem on GitHub</a>
+          <a class="btn" href="https://github.com/AlexLyakishev/CompositesCalculator/issues" target="_blank" rel="noopener">See reported issues</a>
+        </div>
+        <h3>A good report has</h3>
+        <ol class="fb-steps">
+          <li><b>A screenshot</b> of the inputs and the result that looks wrong. On Windows press <kbd>Win</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd>, on a Mac <kbd>Cmd</kbd> + <kbd>Shift</kbd> + <kbd>4</kbd>, then paste it (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>V</kbd>) or drag the image into the GitHub text box.</li>
+          <li><b>What you did</b>: the module, the layup and material, and the numbers you entered.</li>
+          <li><b>What you expected</b>, and why: a hand calculation, a test result, a data sheet or another program.</li>
+          <li><b>What you got</b> instead, including any error message word for word.</li>
+        </ol>
+        <p class="hint">The report button fills in the library version and your current layup for you. GitHub needs a free account to post; the report and its screenshots are public, so leave out anything confidential.</p>
       </div>
     </section>
   </div>

@@ -260,6 +260,14 @@ function fitView() {
   V3.camera.updateProjectionMatrix();
 }
 $("fitBtn").addEventListener("click", fitView);
+// the report link carries the setup, so a GitHub issue starts with what is needed to reproduce it
+$("fbReport").addEventListener("click", () => {
+  const setup = [`Page: Shape Beam (beta)`, `Model: ${$("meshInfo").textContent}`, `Span axis: ${$("axis").value}, mesh is the ${$("surface").value} surface`,
+    `Layup: ${$("seq").value}, ${$("mat").value}`, `Supports: ${JSON.stringify(S.supports)}`, `Point loads: ${JSON.stringify(S.pls)}`,
+    `Line loads: ${JSON.stringify(S.lls)}`, `Gravity: ${$("grav").value || "off"} x ${$("gfac").value} g`, `Elements: ${$("nel").value}`,
+    `Browser: ${navigator.userAgent}`].join("\n");
+  $("fbReport").href = `https://github.com/AlexLyakishev/CompositesCalculator/issues/new?template=bug_report.yml&setup=${encodeURIComponent(setup)}`;
+});
 
 // colour scales: safety factor, one warm hue from dark (R = 1, critical) to pale (R >= 10); R < 1 is the fail colour
 const R_STOPS = [[0, [0.47, 0.17, 0.05]], [0.35, [0.80, 0.42, 0.12]], [0.7, [0.95, 0.72, 0.42]], [1, [0.97, 0.91, 0.80]]];

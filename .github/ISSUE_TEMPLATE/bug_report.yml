@@ -1,0 +1,58 @@
+name: Report a problem
+description: A wrong or suspicious result, an error message, a broken layout, or something missing.
+title: "[Problem] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report this. A screenshot of the inputs and the result is the most useful thing you can add: paste it (Ctrl/Cmd + V) or drag the image into any box below.
+        This issue is public, so leave out anything confidential.
+  - type: dropdown
+    id: page
+    attributes:
+      label: Where
+      options:
+        - Laminate
+        - Tube Stiffness
+        - Failure Analysis
+        - Beam
+        - Tube Clamp
+        - Bolted Joint
+        - Vibration
+        - Quick check
+        - Materials
+        - Shape Beam (beta)
+        - Python library
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you got, including any error message word for word, and a screenshot.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and why
+      description: For a wrong number, where the right one comes from (a hand calculation, a test, a data sheet, another program).
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The module, the layup and material, and the inputs you entered.
+      placeholder: |
+        1. Open Tube Stiffness
+        2. Layup 0/45/-45/90/s, Graphite_Epoxy_T300_N5208
+        3. ...
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: Filled in by the Report button on the page. Leave it as it is, or add your browser if it is empty.
+      render: text

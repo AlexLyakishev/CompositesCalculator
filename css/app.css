@@ -418,6 +418,9 @@ table.plies .c-ang { width: 78px; } table.plies .c-t { width: 80px; } table.plie
 .modeseg { flex: none; }
 .modeseg button { min-width: 54px; }
 body.simple { --sbw: 0px; }
+/* the sidebar has Feedback in Full mode; Simple mode has no sidebar, so the toolbar carries it */
+body:not(.simple) #fbBtn { display: none; }
+#fbBtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
 body.simple .sidebar, body.simple #menuBtn, body.simple #backdrop { display: none !important; }
 .ph .step { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: -2px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); font: 600 11px/1 var(--sans); flex: none; }
 #sPart { margin-bottom: 10px; }
@@ -440,6 +443,13 @@ body.simple .sidebar, body.simple #menuBtn, body.simple #backdrop { display: non
 .mform-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 #matFormMsg { font-size: 12px; color: var(--muted); }
 
+.fb { max-width: 760px; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+.fb p { margin: 0 0 10px; }
+.fb h3 { margin: 16px 0 6px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.fb-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.fb-actions .btn { height: 30px; padding: 0 12px; text-decoration: none; font-size: 12.5px; }
+.fb-steps { margin: 0; padding-left: 20px; } .fb-steps li { margin-bottom: 6px; } .fb-steps b { color: var(--ink); font-weight: 600; }
+kbd { font: 11px var(--mono); padding: 0 4px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 3px; background: var(--surface-2); color: var(--ink); }
 ul.road { margin: 0; padding-left: 18px; } ul.road li { margin-bottom: 10px; } ul.road b { display: block; font-weight: 600; }
 
 /* ================= responsive ================= */
@@ -490,6 +500,7 @@ ul.road { margin: 0; padding-left: 18px; } ul.road li { margin-bottom: 10px; } u
   .prm-grid { grid-template-columns: minmax(0, 1fr); }
   .search { width: 100%; }
   .statusbar .hide-sm { display: none; }
+  #fbBtn .fb-lbl { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .sidebar, details.xp > summary::before { transition: none; } }
 @media print {

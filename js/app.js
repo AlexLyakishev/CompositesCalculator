@@ -28,6 +28,7 @@ async function boot() {
     status.textContent = "Ready";
     status.className = "ready";
     status.hidden = true; $("statusDiv").hidden = true;
+    libVersion = r.result.version;
     $("foot").textContent = `composites_calculator_lib v${r.result.version} (${r.result.update_date}) · Python runs locally in the browser via Pyodide`;
     // Simple mode starts from a ready-made part, so there is something to load straight away
     if (uiMode === "simple" && !$("preset").value && PRESETS.length) applyPreset(PRESETS[0].id);
@@ -109,14 +110,27 @@ const MODULES = {
   vibration: ["Vibration", "Natural frequencies of the current tube as a beam (bending, torsion, axial) and of a flat, simply supported plate of the current layup."],
   materials: ["Materials", "Ply material properties available to the layup builder."],
   upcoming: ["Roadmap", "Features planned for later versions."],
+  feedback: ["Feedback", "Report a wrong result, an error or a missing feature on GitHub, with a screenshot."],
 };
 const MODULE_KEY = "composites_calculator_module";
+// the GitHub issue form, with the version and the current layup filled in (fields are matched by their id)
+const ISSUES_URL = "https://github.com/AlexLyakishev/CompositesCalculator/issues";
+let libVersion = null;
+function setReportLink() {
+  const spec = layupSpec();
+  const setup = [`Page: ${location.href.split("#")[0]}`, `Library: v${libVersion || "?"}`, `Last module: ${MODULES[backTab] ? MODULES[backTab][0] : "?"}`,
+    spec ? `Layup: ${spec.template}, ${spec.material}${Object.keys(spec.overrides).length ? " (with per-ply edits)" : ""}` : "Layup: none", `Browser: ${navigator.userAgent}`].join("\n");
+  $("fbReport").href = `${ISSUES_URL}/new?template=bug_report.yml&setup=${encodeURIComponent(setup)}`;
+}
 let current = "laminate";
 let fullTab = "laminate";  // the module Full mode returns to
+let backTab = "laminate";  // the page open before Feedback
 function showTab(name) {
-  if (!MODULES[name] || (name === "simple") !== (uiMode === "simple")) name = uiMode === "simple" ? "simple" : fullTab;
+  if (!MODULES[name] || (name !== "feedback" && (name === "simple") !== (uiMode === "simple"))) name = uiMode === "simple" ? "simple" : fullTab;
+  if (name === "feedback" && current !== "feedback") backTab = current;  // where Back returns to, and what the report names
   current = name;
-  if (name !== "simple") fullTab = name;
+  $("fbBtn").setAttribute("aria-pressed", String(name === "feedback"));
+  if (name !== "simple" && name !== "feedback") fullTab = name;
   document.querySelectorAll(".nav button[data-tab]").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === name ? "page" : "false"));
   document.querySelectorAll(".module").forEach((p) => (p.hidden = p.id !== "tab-" + name));
   document.querySelectorAll(".insp").forEach((p) => (p.hidden = p.dataset.mod !== name));
@@ -124,17 +138,20 @@ function showTab(name) {
   $("modTitle").textContent = MODULES[name][0];
   $("modTitle").title = MODULES[name][1];
   document.title = `${MODULES[name][0]} · Composites Calculator`;
-  $("layupBar").hidden = name === "materials" || name === "upcoming" || name === "simple";  // these do not show the layup
+  $("layupBar").hidden = name === "materials" || name === "upcoming" || name === "feedback" || name === "simple";  // these do not show the layup
   // the layup is the main input on Laminate; everywhere else it is context, shown as one read-only line
   $("layupBar").classList.toggle("compact", name !== "laminate");
   $("editLayup").hidden = name === "laminate";
   renderLayupRead();
-  document.body.classList.toggle("no-inspector", name === "upcoming");
+  document.body.classList.toggle("no-inspector", name === "upcoming" || name === "feedback");
+  if (name === "feedback") setReportLink();
   document.body.classList.remove("sb-open");
   $("workspace").scrollTop = 0;
-  if (name !== "simple") { try { localStorage.setItem(MODULE_KEY, name); } catch (e) { /* not remembered */ } }
+  if (name !== "simple" && name !== "feedback") { try { localStorage.setItem(MODULE_KEY, name); } catch (e) { /* not remembered */ } }
 }
 document.querySelectorAll(".nav button[data-tab]").forEach((btn) => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
+$("fbBtn").addEventListener("click", () => showTab(current === "feedback" ? backTab : "feedback"));
+$("fbBack").addEventListener("click", () => showTab(backTab));
 
 // interface mode: Simple (one part, one load case, a verdict) or Full (every module). A first visit opens in
 // Simple; after that the page opens in the mode last used.
