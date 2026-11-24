@@ -27,6 +27,8 @@ import numpy as np
 
 import composites_calculator_lib as cc
 
+__version__ = cc.__version__  # one version for the whole project
+
 AXES = {"x": 0, "y": 1, "z": 2}
 
 

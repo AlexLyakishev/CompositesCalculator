@@ -8,9 +8,11 @@ import math
 import numpy as np
 
 # COMPOSITE CALCULATOR LIBRARY by Alex L
-# mind the version number, this is a work in progress and will be updated frequently
-version = 1.2
-update_date = "2026-11-05"
+# Version of the whole project (this library, composites_shape_lib and the web calculator), MAJOR.MINOR.PATCH:
+# PATCH = bug fix, MINOR = new feature, MAJOR = a change that breaks existing scripts. See CONTRIBUTING.md.
+__version__ = "1.3.0"
+version = __version__  # older name, kept for scripts that use it
+update_date = "2026-11-23"
 
 # TODO: generate_anisotropic_stiffness_tensor_C() uses 6B/h^2 in both off-diagonal blocks, which is inconsistent
 # (use 2*sqrt(3)*B/h^2 for a symmetric C, or Tsai's 2B/h^2 / 6B/h^2), and its [A* B*; B* D*] relates in-plane

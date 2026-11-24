@@ -77,7 +77,7 @@ See `CompositesCalculatorExample.py` for a complete example:
 3. A 3D beam finite-element model with those sections is solved under the supports, point loads, line loads and self-weight, with torsion about each section's shear centre.
 4. Ply stresses round every section (from bending, torsion and shear flow from shear force) are checked with the maximum stress, Tsai-Wu and Hashin criteria, and the lowest safety factor is shown on the surface.
 
-The analysis lives in `composites_shape_lib.py` (usable from Python: `mesh_load_stl()`, `shape_analyse()`), the page glue in `py/shape_bridge.py` and `js/shape.js`. `test_composites_shape_lib.py` checks it against the closed-form results of `composites_calculator_lib.py`.
+The analysis lives in `composites_shape_lib.py` (usable from Python: `mesh_load_stl()`, `shape_analyse()`), the page glue in `py/shape_bridge.py` and `js/shape.js`. `tests/test_composites_shape_lib.py` checks it against the closed-form results of `composites_calculator_lib.py`.
 
 Each section's shear centre and its shear flow per unit shear force come from thin-walled single-cell theory (`section_shear_flow()`): the beam twists about the shear centres, and the ply check adds the shear flow from shear force to the torsion shear flow.
 
