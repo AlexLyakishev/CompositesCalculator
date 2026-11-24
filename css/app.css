@@ -414,6 +414,21 @@ table.plies .c-ang { width: 78px; } table.plies .c-t { width: 80px; } table.plie
 .beam-drag { cursor: ew-resize; }
 .plot text { font-family: var(--mono); }
 
+/* simple mode: no module navigation and no layup bar, just the part, the load case and the verdict */
+.modeseg { flex: none; }
+.modeseg button { min-width: 54px; }
+body.simple { --sbw: 0px; }
+body.simple .sidebar, body.simple #menuBtn, body.simple #backdrop { display: none !important; }
+.ph .step { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: -2px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); font: 600 11px/1 var(--sans); flex: none; }
+#sPart { margin-bottom: 10px; }
+#tab-simple .ph { flex-wrap: wrap; padding-top: 4px; padding-bottom: 4px; }
+#sCase button { display: inline-flex; align-items: center; gap: 6px; }
+#sCase button svg { flex: none; color: var(--muted); }
+#sCase button[aria-pressed="true"] svg { color: var(--accent); }#sSection svg { max-width: 420px; }
+#sDiagram svg, #sPlot svg { max-width: 760px; }
+#iSimple .verdict .v-text { line-height: 1.5; }
+#iSimple .verdict .v-text b { font-weight: 600; }
+
 /* materials */
 .mtools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--surface-3); }
 .search { display: flex; align-items: center; gap: 6px; height: 26px; border: 1px solid var(--field-line); border-radius: var(--r); background: var(--field); padding: 0 7px; width: 240px; }
@@ -459,6 +474,7 @@ ul.road { margin: 0; padding-left: 18px; } ul.road li { margin-bottom: 10px; } u
   .sbfoot #sbToggle { display: none; }
   #menuBtn { display: inline-flex; }
   .appid b, .crumb .sep:first-child { display: none; }
+  body.simple .crumb { display: none; }
   .toolbar { gap: 6px; padding: 0 8px; }
   #status { max-width: 90px; }
   .workspace { padding: 10px; }

@@ -14,6 +14,8 @@ The library combines:
 - calculation of laminate A, B, and D matrices
 - generation of equivalent anisotropic stiffness tensor `C`
 - approximate `E*I` or `D_x` values for rectangular and circular tubes
+- tube natural frequencies (bending, torsion, axial)
+- natural frequencies of simply supported rectangular laminate plates
 
 ## Installation
 No installation is required beyond Python and the dependencies used in the example.
@@ -39,6 +41,8 @@ The library builds laminate properties using classical laminate theory:
 For simple structural estimates, the library uses beam-based approximations:
 - `generate_EIeq_rect_tube()` computes an equivalent bending stiffness for a rectangular tube cross-section
 - `generate_Dx_eq_circ_tube()` computes an equivalent bending stiffness for a circular tube cross-section
+- `generate_natural_frequencies_tube()` computes bending (Euler-Bernoulli), torsion and axial natural frequencies of a tube from its stiffness and the ply densities, for clamped-free, pinned-pinned, clamped-clamped, free-free and clamped-pinned supports
+- `generate_natural_frequencies_plate()` computes the lowest natural frequencies and (m, n) mode numbers of a rectangular laminate simply supported on all edges (Navier solution; exact for symmetric cross-ply, an upper estimate when D16/D26 or B are not zero)
 
 ## Example usage
 See `CompositesCalculatorExample.py` for a complete example:
